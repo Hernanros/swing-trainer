@@ -7,15 +7,17 @@
 
 ## 1. Purpose & Philosophy
 
-SwingTrainer is a personal swing trading training and management platform built for one user: Hernan. The goal is to provide a structured path from "small real money, testing my edge" to "consistent, skilled trader."
+SwingTrainer is a swing trading training and management platform. It is designed for personal use first (Hernan) but architected to support multiple users, each with their own profile, skill configuration, trade history, playbook, and training curriculum.
 
 **Core philosophy: Train to Trade.** Training drives; journaling validates. The app is not a passive dashboard — it tells you what to practice, assigns targeted drills based on your actual weak spots, and detects patterns in your real trades to adapt your training automatically.
 
-**User context at design time:**
+**Hernan's context at design time:**
 - Currently trading small real money, testing edge
-- Identified weak spots: Entry Timing, Chart Reading, Risk & Sizing, Setup Selection
+- Active skill areas: Entry Timing, Chart Reading, Risk & Sizing, Setup Selection
 - Time budget: 30–45 min/day
 - Wants a guided daily flow with optional depth, not a tab-browser
+
+**Multi-user intent:** Future users onboard with their own skill selection and customizations. All data is user-scoped. No shared data between users.
 
 ---
 
@@ -37,7 +39,8 @@ Clean slate at `OneDrive/Documents/swing-trainer/`. Nothing carried over from th
 ### Database
 - **SQLite via SQLAlchemy** — replaces localStorage entirely
 - Single `swing-trainer.db` file, local only
-- Tables: trades, journal_entries, checklist_logs, skill_scores, drill_results, module_progress, playbook_rules
+- All tables are user-scoped via `user_id` foreign key
+- Tables: users, trades, checklist_logs, skill_scores, drill_results, module_progress, playbook_rules, watchlist, ai_patterns, cached_content
 
 ### AI
 - **Claude API (claude-sonnet-4-6)** — called from backend only; no API key in browser
@@ -55,7 +58,21 @@ Clean slate at `OneDrive/Documents/swing-trainer/`. Nothing carried over from th
 
 ---
 
-## 3. Navigation Structure
+## 3. User Onboarding
+
+New users go through a one-time setup flow before reaching the main app:
+
+1. **Name** — display name only; no email/password required for local use
+2. **Trading stage** — Still learning / Small real money / Active trader (sets starting level estimate)
+3. **Skill selection** — presented with all 6 areas; user picks 2–6 to track (can change later in Settings)
+4. **Time budget** — 15–20 min / 30–45 min / 1 hour+ (adjusts daily drill count: 1 / 2 / 3 drills per day)
+5. **Playbook seed** — prompted to add at least one setup type with one must-have rule before starting (ensures the journal is usable from day one)
+
+Multiple users on one machine switch via a user picker on the login screen. No passwords — this is a local personal tool.
+
+---
+
+## 4. Navigation Structure
 
 ```
 Sidebar (always visible)
@@ -93,11 +110,20 @@ The home screen is the daily operating system. It is time-aware: the greeting an
 ## 5. Curriculum System (Train Tab)
 
 ### Skill Scoring
-Four skills tracked, each scored 0–100:
-- **Chart Reading** — ability to identify key levels, trend structure, setup validity
-- **Entry Timing** — precision and confirmation of entries
-- **Risk & Sizing** — position sizing consistency, stop adherence
-- **Setup Selection** — selectivity, avoiding low-quality setups
+
+Six skill areas are available. Each user selects which ones to track during onboarding (minimum 2, maximum 6). Scores run 0–100 per active skill.
+
+**The six areas:**
+| Skill | Description |
+|-------|-------------|
+| **Chart Reading** | Identifying key levels, trend structure, setup validity |
+| **Entry Timing** | Precision and confirmation of entries |
+| **Risk & Sizing** | Position sizing consistency, stop adherence |
+| **Setup Selection** | Selectivity, avoiding low-quality or out-of-edge setups |
+| **Trade Management** | Holding through noise, not exiting winners early, letting losers run to stop |
+| **Emotional Discipline** | FOMO control, no revenge trading, executing without hesitation |
+
+Each skill area has its own dedicated drill types, module content, and journal pattern detection logic. The overall skill score and level are computed from the user's active skills only.
 
 Score inputs:
 - **Drill performance** (primary, 70% weight) — accuracy on completed drills
@@ -152,7 +178,11 @@ Each module: **Theory** (Claude-generated, ~300 words, cached in DB) → **Exerc
 **Entry Timing:** Breakout Entry Mechanics, Pullback Entry Timing, Confirmation vs Anticipation  
 **Risk & Sizing:** Position Sizing from Risk %, Structural Stop Placement, Trailing Stops  
 **Setup Selection:** Defining Your Edge, High-Quality vs Low-Quality Setups, Market Context Filters  
+**Trade Management:** Holding Through Pullbacks, Scaling Out at Targets, When to Move Stop to Breakeven  
+**Emotional Discipline:** Pre-Trade State Check, Recognising FOMO, Post-Loss Reset Protocol  
 **Advanced (L4+):** Multi-Timeframe Analysis, Supply & Demand Zones, Managing Partial Positions
+
+Only modules for a user's active skill areas are visible. Locked modules show the unlock condition.
 
 ### Content Generation
 Module theory and quiz questions are generated by Claude on first access and cached in the DB. They are not static files. The AI is prompted with the user's skill level and recent drill mistakes to make content contextually relevant.
@@ -247,15 +277,16 @@ Sortable table of all logged trades: Symbol, Date, Setup, Direction, Entry, Exit
 ## 11. Data Model (SQLite)
 
 ```
-trades          — id, symbol, date, direction, setup_type, entry, stop, target, exit, shares, status, practice, pre_note, debrief, checklist_score, pnl, r_multiple, created_at
-checklist_logs  — id, trade_id, rule_id, checked, tier
-playbook_rules  — id, setup_type, text, tier, position, active
-watchlist       — id, symbol, exchange, notes, added_at
-skill_scores    — id, skill, score, updated_at
-drill_results   — id, drill_type, skill, score, date, detail_json
-module_progress — id, module_slug, status, quiz_score, completed_at
-ai_patterns     — id, pattern_text, severity, detected_at, trade_range
-cached_content  — id, key, content, generated_at  (theory text, quiz questions)
+users           — id, name, trading_stage, time_budget, active_skills (json list), created_at
+trades          — id, user_id, symbol, date, direction, setup_type, entry, stop, target, exit, shares, status, practice, pre_note, debrief, checklist_score, pnl, r_multiple, created_at
+checklist_logs  — id, user_id, trade_id, rule_id, checked, tier
+playbook_rules  — id, user_id, setup_type, text, tier, position, active
+watchlist       — id, user_id, symbol, exchange, notes, added_at
+skill_scores    — id, user_id, skill, score, updated_at
+drill_results   — id, user_id, drill_type, skill, score, date, detail_json
+module_progress — id, user_id, module_slug, status, quiz_score, completed_at
+ai_patterns     — id, user_id, pattern_text, severity, detected_at, trade_range
+cached_content  — id, key, content, generated_at  (shared across users; keyed by module slug + level)
 ```
 
 ---
