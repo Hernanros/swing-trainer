@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Environment — never commit API keys
+.env
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Discord bot config (contains token)
+discord_config.json
+
+# OS
+.DS_Store
+Thumbs.db
