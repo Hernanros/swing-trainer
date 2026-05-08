@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey
 )
@@ -14,7 +14,7 @@ class User(Base):
     trading_stage = Column(String, nullable=False)   # learning | small_money | active
     time_budget = Column(String, nullable=False)     # 15min | 30min | 60min
     active_skills = Column(Text, nullable=False)     # JSON list
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     trades = relationship("Trade", back_populates="user", cascade="all, delete-orphan")
     playbook_rules = relationship("PlaybookRule", back_populates="user", cascade="all, delete-orphan")
@@ -49,7 +49,7 @@ class Trade(Base):
     checklist_score = Column(Float, nullable=True)
     pnl = Column(Float, nullable=True)
     r_multiple = Column(Float, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="trades")
     checklist_logs = relationship("ChecklistLog", back_populates="trade", cascade="all, delete-orphan")
@@ -87,7 +87,7 @@ class WatchlistItem(Base):
     symbol = Column(String, nullable=False)
     exchange = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
-    added_at = Column(DateTime, default=datetime.utcnow)
+    added_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="watchlist")
 
@@ -98,7 +98,8 @@ class SkillScore(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     skill = Column(String, nullable=False)
     score = Column(Float, default=0.0)
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                        onupdate=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="skill_scores")
 
@@ -112,7 +113,7 @@ class DrillResult(Base):
     score = Column(Float, nullable=False)
     date = Column(String, nullable=False)
     detail_json = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="drill_results")
 
@@ -135,7 +136,7 @@ class AIPattern(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     pattern_text = Column(Text, nullable=False)
     severity = Column(String, nullable=False)        # problem | watch | strength
-    detected_at = Column(DateTime, default=datetime.utcnow)
+    detected_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     trade_range = Column(String, nullable=True)
 
     user = relationship("User", back_populates="ai_patterns")
@@ -146,4 +147,4 @@ class CachedContent(Base):
     id = Column(Integer, primary_key=True)
     key = Column(String, unique=True, nullable=False)  # e.g. module:breakout-entry:theory:level2
     content = Column(Text, nullable=False)
-    generated_at = Column(DateTime, default=datetime.utcnow)
+    generated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
