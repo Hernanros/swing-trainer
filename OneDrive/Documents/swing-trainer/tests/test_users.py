@@ -2,11 +2,16 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from backend.main import app
 from backend.database import Base, get_db
 
-TEST_DB_URL = "sqlite:///./test.db"
-_engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
+TEST_DB_URL = "sqlite://"  # in-memory, no file on disk
+_engine = create_engine(
+    TEST_DB_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,  # required: all connections share same in-memory DB
+)
 _Session = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
 
 
@@ -105,3 +110,12 @@ def test_update_user_invalid_stage():
     user_id = client.post("/api/users/", json=VALID_USER).json()["id"]
     resp = client.put(f"/api/users/{user_id}", json={"trading_stage": "guru"})
     assert resp.status_code == 400
+
+
+def test_update_user_skills_reconciles_scores():
+    user_id = client.post("/api/users/", json=VALID_USER).json()["id"]
+    new_skills = ["chart_reading", "trade_management"]
+    client.put(f"/api/users/{user_id}", json={"active_skills": new_skills})
+    scores = client.get(f"/api/users/{user_id}/skills").json()
+    skill_names = {s["skill"] for s in scores}
+    assert skill_names == set(new_skills)

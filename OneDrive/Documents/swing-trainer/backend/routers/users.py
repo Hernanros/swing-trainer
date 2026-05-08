@@ -1,7 +1,7 @@
 import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Union
 from backend.database import get_db
 from backend.models import User, SkillScore
 from backend.schemas import (
@@ -23,7 +23,7 @@ def _to_response(user: User) -> dict:
     }
 
 
-def _validate_user_body(body):
+def _validate_user_body(body: Union[UserCreate, UserUpdate]) -> None:
     if body.trading_stage is not None and body.trading_stage not in VALID_STAGES:
         raise HTTPException(400, f"trading_stage must be one of {VALID_STAGES}")
     if body.time_budget is not None and body.time_budget not in VALID_TIME_BUDGETS:
@@ -80,6 +80,15 @@ def update_user(user_id: int, body: UserUpdate, db: Session = Depends(get_db)):
     if body.time_budget is not None:
         user.time_budget = body.time_budget
     if body.active_skills is not None:
+        existing = {s.skill for s in db.query(SkillScore).filter(SkillScore.user_id == user_id).all()}
+        new_skills = set(body.active_skills)
+        for skill in new_skills - existing:
+            db.add(SkillScore(user_id=user_id, skill=skill, score=0.0))
+        for row in db.query(SkillScore).filter(
+            SkillScore.user_id == user_id,
+            SkillScore.skill.notin_(list(new_skills))
+        ).all():
+            db.delete(row)
         user.active_skills = json.dumps(body.active_skills)
     db.commit()
     db.refresh(user)
