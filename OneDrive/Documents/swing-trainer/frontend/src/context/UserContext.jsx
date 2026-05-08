@@ -18,6 +18,7 @@ export function UserProvider({ children }) {
           if (found) setUser(found)
         }
       })
+      .catch(() => { /* backend unreachable — stays at empty state, onboarding renders */ })
       .finally(() => setLoading(false))
   }, [])
 
@@ -38,4 +39,8 @@ export function UserProvider({ children }) {
   )
 }
 
-export const useUser = () => useContext(UserContext)
+export function useUser() {
+  const ctx = useContext(UserContext)
+  if (ctx === null) throw new Error('useUser must be used within a UserProvider')
+  return ctx
+}
