@@ -383,7 +383,8 @@ DEV_BYPASS_AUTH=true
 | `backend/database.py` | `DATABASE_URL` from `os.getenv()` |
 | `backend/requirements.txt` | Add `authlib` |
 | `frontend/index.html` | PWA meta tags + service worker registration |
-| `frontend/src/context/UserContext.jsx` | Handle 401 → show Login component |
+| `frontend/src/api.js` | Detect HTTP 401 response and throw a typed `AuthError` |
+| `frontend/src/context/UserContext.jsx` | Catch `AuthError` → set `authRequired` state → render `<Login />` instead of `<Onboarding />` |
 | `frontend/vite.config.js` | Proxy `/auth/*` to backend |
 
 ### Unchanged
