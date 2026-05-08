@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { api } from '../api'
+import { api, AuthError } from '../api'
 
 const UserContext = createContext(null)
 
@@ -7,6 +7,7 @@ export function UserProvider({ children }) {
   const [user, setUser] = useState(null)
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
+  const [authRequired, setAuthRequired] = useState(false)
 
   useEffect(() => {
     const savedId = localStorage.getItem('activeUserId')
@@ -18,7 +19,10 @@ export function UserProvider({ children }) {
           if (found) setUser(found)
         }
       })
-      .catch(() => { /* backend unreachable — stays at empty state, onboarding renders */ })
+      .catch(err => {
+        if (err instanceof AuthError) setAuthRequired(true)
+        // other errors: backend unreachable — stays at empty state, onboarding renders
+      })
       .finally(() => setLoading(false))
   }, [])
 
@@ -33,7 +37,7 @@ export function UserProvider({ children }) {
   }
 
   return (
-    <UserContext.Provider value={{ user, users, loading, switchUser, addUser }}>
+    <UserContext.Provider value={{ user, users, loading, authRequired, switchUser, addUser }}>
       {children}
     </UserContext.Provider>
   )

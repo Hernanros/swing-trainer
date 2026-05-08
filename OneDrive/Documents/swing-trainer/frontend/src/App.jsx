@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { UserProvider, useUser } from './context/UserContext'
 import Sidebar from './components/Sidebar'
 import Onboarding from './components/Onboarding'
+import Login from './components/Login'
 import Home from './pages/Home'
 import Train from './pages/Train'
 import Journal from './pages/Journal'
@@ -10,10 +11,11 @@ import Watchlist from './pages/Watchlist'
 import Progress from './pages/Progress'
 
 function AppShell() {
-  const { user, loading } = useUser()
+  const { user, loading, authRequired } = useUser()
 
-  if (loading) return <div className="loading">Loading…</div>
-  if (!user)   return <Onboarding />
+  if (loading)      return <div className="loading">Loading…</div>
+  if (authRequired) return <Login />
+  if (!user)        return <Onboarding />
 
   return (
     <div className="app-shell">
