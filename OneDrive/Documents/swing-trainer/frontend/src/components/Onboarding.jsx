@@ -39,6 +39,7 @@ export default function Onboarding() {
 
   async function finish() {
     if (skills.length < 2) { setError('Select at least 2 skill areas'); return }
+    if (skills.length > SKILLS.length) { setError('Too many skills selected'); return }
     setSaving(true)
     setError('')
     try {
@@ -51,6 +52,7 @@ export default function Onboarding() {
       addUser(u)
     } catch (e) {
       setError(e.message)
+    } finally {
       setSaving(false)
     }
   }
