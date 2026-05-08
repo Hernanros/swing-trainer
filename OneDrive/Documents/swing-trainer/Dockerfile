@@ -12,7 +12,6 @@ WORKDIR /app
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
-COPY conftest.py ./
 COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 ENV PORT=8000
