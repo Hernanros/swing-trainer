@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from backend.main import app
 from backend.database import Base, get_db
+from backend.auth import require_auth
 
 TEST_DB_URL = "sqlite://"  # in-memory, no file on disk
 _engine = create_engine(
@@ -24,6 +25,7 @@ def override_get_db():
 
 
 app.dependency_overrides[get_db] = override_get_db
+app.dependency_overrides[require_auth] = lambda: None  # bypass auth in tests
 
 
 @pytest.fixture(autouse=True)
