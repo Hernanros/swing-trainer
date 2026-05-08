@@ -1,4 +1,3 @@
-import pytest
 from backend.schemas import UserCreate, VALID_SKILLS
 
 def test_user_create_strips_whitespace():

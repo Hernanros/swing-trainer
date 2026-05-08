@@ -33,6 +33,8 @@ class UserUpdate(BaseModel):
     time_budget: Optional[str] = None
     active_skills: Optional[List[str]] = None
 
+    model_config = {"str_strip_whitespace": True}
+
 
 class UserResponse(BaseModel):
     id: int
