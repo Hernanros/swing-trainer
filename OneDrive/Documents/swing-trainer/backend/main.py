@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="SwingTrainer API", lifespan=lifespan)
 
-app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, https_only=not _DEV_MODE)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173"] if _DEV_MODE else [],
