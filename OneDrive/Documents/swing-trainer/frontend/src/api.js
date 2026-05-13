@@ -23,10 +23,16 @@ async function request(method, path, body) {
 
 export const api = {
   users: {
-    list: () => request('GET', '/users/'),
-    create: (body) => request('POST', '/users/', body),
-    get: (id) => request('GET', `/users/${id}`),
-    update: (id, body) => request('PUT', `/users/${id}`, body),
-    skills: (id) => request('GET', `/users/${id}/skills`),
+    list:   ()         => request('GET',  '/users/'),
+    create: (body)     => request('POST', '/users/', body),
+    get:    (id)       => request('GET',  `/users/${id}`),
+    update: (id, body) => request('PUT',  `/users/${id}`, body),
+    skills: (id)       => request('GET',  `/users/${id}/skills`),
   },
+  trades: {
+    list:  ()         => request('GET',  '/trades/'),
+    open:  (body)     => request('POST', '/trades/', body),
+    close: (id, body) => request('PUT',  `/trades/${id}/close`, body),
+  },
+  me: () => request('GET', '/me'),
 }
