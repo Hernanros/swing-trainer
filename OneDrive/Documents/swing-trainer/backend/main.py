@@ -9,6 +9,7 @@ from backend.database import engine
 import backend.models as models  # noqa: F401
 from backend.routers import users
 from backend.routers import auth as auth_router
+from backend.routers import trades as trades_router
 from backend.auth import require_auth
 
 SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-secret-change-in-production")
@@ -39,6 +40,7 @@ app.add_middleware(
 
 app.include_router(auth_router.router)
 app.include_router(users.router, prefix="/api", dependencies=[Depends(require_auth)])
+app.include_router(trades_router.router, prefix="/api", dependencies=[Depends(require_auth)])
 
 
 @app.get("/health")
