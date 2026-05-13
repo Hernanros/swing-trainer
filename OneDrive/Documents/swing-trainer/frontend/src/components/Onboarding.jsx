@@ -24,7 +24,7 @@ const BUDGETS = [
 ]
 
 export default function Onboarding() {
-  const { users, addUser, switchUser } = useUser()
+  const { users, addUser, switchUser, sessionEmail } = useUser()
   const [step, setStep]     = useState(users.length > 0 ? 'pick' : 'name')
   const [name, setName]     = useState('')
   const [stage, setStage]   = useState('')
@@ -48,6 +48,7 @@ export default function Onboarding() {
         trading_stage: stage,
         time_budget: budget,
         active_skills: skills,
+        email: sessionEmail || undefined,
       })
       addUser(u)
     } catch (e) {
