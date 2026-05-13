@@ -49,6 +49,7 @@ def create_user(body: UserCreate, db: Session = Depends(get_db)):
         trading_stage=body.trading_stage,
         time_budget=body.time_budget,
         active_skills=json.dumps(body.active_skills),
+        email=body.email or None,
     )
     db.add(user)
     db.flush()
