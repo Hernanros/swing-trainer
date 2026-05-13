@@ -71,7 +71,7 @@ def open_trade(
         pre_note=body.pre_note,
         status="open",
         date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
-        setup_type="",
+        setup_type=None,
     )
     db.add(trade)
     db.commit()

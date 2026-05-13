@@ -67,6 +67,8 @@ class TradeClose(BaseModel):
 
 
 class TradeResponse(BaseModel):
+    model_config = {"from_attributes": True}
+
     id: int
     symbol: str
     direction: str

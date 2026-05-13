@@ -37,7 +37,7 @@ class Trade(Base):
     symbol = Column(String, nullable=False)
     date = Column(String, nullable=False)
     direction = Column(String, nullable=False)       # long | short
-    setup_type = Column(String, nullable=False)
+    setup_type = Column(String, nullable=True)
     entry = Column(Float, nullable=False)
     stop = Column(Float, nullable=False)
     target = Column(Float, nullable=False)
