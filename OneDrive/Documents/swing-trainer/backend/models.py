@@ -14,6 +14,7 @@ class User(Base):
     trading_stage = Column(String, nullable=False)   # learning | small_money | active
     time_budget = Column(String, nullable=False)     # 15min | 30min | 60min
     active_skills = Column(Text, nullable=False)     # JSON list
+    email = Column(String, nullable=True, unique=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     trades = relationship("Trade", back_populates="user", cascade="all, delete-orphan")
