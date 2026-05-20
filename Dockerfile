@@ -2,7 +2,7 @@
 FROM python:3.13-slim
 # Use /srv so Railway's /app volume only holds the database, not the code
 WORKDIR /srv
-RUN mkdir -p /app
+RUN mkdir -p /app && mkdir -p /data
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
