@@ -3,9 +3,11 @@ import io
 import os
 import time
 import requests
+import yfinance as yf
 from datetime import datetime, timezone
 
 _cache: dict[str, tuple[float, dict]] = {}
+_candle_cache: dict[str, tuple[float, list]] = {}
 _CACHE_TTL = 900  # 15 minutes
 
 _FINNHUB_TOKEN = os.getenv("FINNHUB_TOKEN", "")
@@ -76,6 +78,26 @@ def _fetch_yahoo(symbol: str) -> dict:
     }
 
 
+def _candles_yfinance(symbol: str, range_days: int) -> list[dict]:
+    """Fetch daily OHLCV via the yfinance library (handles Yahoo auth automatically)."""
+    ticker = yf.Ticker(symbol)
+    df = ticker.history(period=f"{range_days}d", interval="1d", auto_adjust=True)
+    if df is None or df.empty:
+        raise ValueError(f"No yfinance data for {symbol}")
+    candles = []
+    for ts, row in df.iterrows():
+        t = int(ts.timestamp())
+        candles.append({
+            "time":   t,
+            "open":   round(float(row["Open"]),   2),
+            "high":   round(float(row["High"]),   2),
+            "low":    round(float(row["Low"]),    2),
+            "close":  round(float(row["Close"]),  2),
+            "volume": int(row.get("Volume") or 0),
+        })
+    return sorted(candles, key=lambda c: c["time"])
+
+
 def _candles_stooq(symbol: str, range_days: int) -> list[dict]:
     """Fetch daily OHLCV from stooq.com (no API key, cloud-friendly)."""
     now = datetime.now(timezone.utc)
@@ -83,7 +105,7 @@ def _candles_stooq(symbol: str, range_days: int) -> list[dict]:
     d1 = frm.strftime("%Y%m%d")
     d2 = now.strftime("%Y%m%d")
     url = f"https://stooq.com/q/d/l/?s={symbol.lower()}.us&d1={d1}&d2={d2}&i=d"
-    resp = requests.get(url, timeout=10)
+    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
     resp.raise_for_status()
     text = resp.text.strip()
     if not text or "No data" in text or text.startswith("<!"):
@@ -135,7 +157,21 @@ def _candles_yahoo(symbol: str, range_days: int) -> list[dict]:
 
 
 def get_candles(symbol: str, range_days: int = 60) -> list[dict]:
-    # 1. Finnhub (free tier blocks this, but try anyway)
+    symbol = symbol.upper()
+    cache_key = f"{symbol}:{range_days}"
+    now = time.time()
+    if cache_key in _candle_cache:
+        ts, data = _candle_cache[cache_key]
+        if now - ts < _CACHE_TTL:
+            return data
+
+    candles = _fetch_candles(symbol, range_days)
+    _candle_cache[cache_key] = (now, candles)
+    return candles
+
+
+def _fetch_candles(symbol: str, range_days: int) -> list[dict]:
+    # 1. Finnhub (free tier usually blocks candles, but try)
     if _FINNHUB_TOKEN:
         try:
             now = int(time.time())
@@ -155,14 +191,14 @@ def get_candles(symbol: str, range_days: int = 60) -> list[dict]:
         except Exception:
             pass
 
-    # 2. stooq.com — reliable from cloud IPs, no API key
+    # 2. yfinance — handles Yahoo auth, no raw rate-limit issues
     try:
-        return _candles_stooq(symbol, range_days)
+        return _candles_yfinance(symbol, range_days)
     except Exception:
         pass
 
-    # 3. Yahoo Finance v8 — last resort
-    return _candles_yahoo(symbol, range_days)
+    # 3. stooq.com — last resort
+    return _candles_stooq(symbol, range_days)
 
 
 def get_quote(symbol: str) -> dict:
