@@ -80,19 +80,21 @@ def get_candles(symbol: str, range_days: int = 60) -> list[dict]:
     frm = now - range_days * 86400
 
     if _FINNHUB_TOKEN:
-        url = "https://finnhub.io/api/v1/stock/candle"
-        r = requests.get(url, params={
-            "symbol": symbol, "resolution": "D",
-            "from": frm, "to": now, "token": _FINNHUB_TOKEN,
-        }, timeout=10)
-        r.raise_for_status()
-        d = r.json()
-        if d.get("s") != "ok" or not d.get("t"):
-            raise ValueError(f"No candle data for {symbol}")
-        return [
-            {"time": t, "open": o, "high": h, "low": l, "close": c, "volume": v}
-            for t, o, h, l, c, v in zip(d["t"], d["o"], d["h"], d["l"], d["c"], d["v"])
-        ]
+        try:
+            url = "https://finnhub.io/api/v1/stock/candle"
+            r = requests.get(url, params={
+                "symbol": symbol, "resolution": "D",
+                "from": frm, "to": now, "token": _FINNHUB_TOKEN,
+            }, timeout=10)
+            r.raise_for_status()
+            d = r.json()
+            if d.get("s") == "ok" and d.get("t"):
+                return [
+                    {"time": t, "open": o, "high": h, "low": l, "close": c, "volume": v}
+                    for t, o, h, l, c, v in zip(d["t"], d["o"], d["h"], d["l"], d["c"], d["v"])
+                ]
+        except Exception:
+            pass  # fall through to Yahoo Finance
 
     # Fallback: Yahoo Finance v8 (may be blocked on cloud IPs)
     url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}"
