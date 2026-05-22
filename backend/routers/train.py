@@ -1,4 +1,5 @@
 import json
+import logging
 import random
 import time
 from datetime import datetime, timezone
@@ -7,19 +8,30 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.auth import get_current_user
 from backend.models import User, DrillResult, SkillScore
-from pydantic import BaseModel
+from pydantic import BaseModel as _BaseModel, Field
 from backend.schemas import RiskCalcSubmit, DRILLS_PER_DAY, VALID_SKILLS
+from backend.services.claude import call_claude
+
+_log = logging.getLogger(__name__)
 
 
-class QuizSubmit(BaseModel):
+class QuizSubmit(_BaseModel):
     skill: str
     drill_type: str
     score: float   # 0 or 100
 
 
-class AIDrillRequest(BaseModel):
-    topic: str
-    context: str
+class AIDrillRequest(_BaseModel):
+    topic: str = Field(..., min_length=1, max_length=200)
+    context: str = Field(..., max_length=1000)
+    model_config = {"str_strip_whitespace": True}
+
+
+class _AIQuestion(_BaseModel):
+    q: str
+    choices: list[str] = Field(..., min_length=4, max_length=4)
+    answer: int = Field(..., ge=0, le=3)
+    explanation: str
 
 router = APIRouter(prefix="/train", tags=["train"])
 
@@ -146,11 +158,10 @@ def submit_quiz(
 
 @router.post("/ai-drill")
 def generate_ai_drill(body: AIDrillRequest, current_user: User = Depends(get_current_user)):
-    from backend.services.claude import call_claude
     prompt = f"""You are a swing trading quiz generator.
 
-Topic: {body.topic}
-Context: {body.context}
+<topic>{body.topic}</topic>
+<context>{body.context}</context>
 
 Generate exactly 5 multiple-choice quiz questions testing understanding of this specific concept.
 Return ONLY a JSON array with this exact shape, no markdown, no explanation:
@@ -169,9 +180,18 @@ The "answer" field is the 0-based index of the correct choice."""
             raw = call_claude(prompt, max_tokens=1500)
             questions = json.loads(raw)
             if not isinstance(questions, list) or len(questions) == 0:
-                raise ValueError("empty")
-            return {"questions": questions}
-        except Exception:
+                raise ValueError("empty response")
+            validated = [_AIQuestion(**item).model_dump() for item in questions]
+            return {"questions": validated}
+        except (RuntimeError, ValueError) as exc:
+            if "api_key" in str(exc).lower() or "not set" in str(exc).lower():
+                _log.error("AI service misconfigured: %s", exc)
+                raise HTTPException(500, "AI service is misconfigured")
+            _log.warning("ai-drill attempt %d failed: %s", attempt + 1, exc)
+            if attempt == 0:
+                time.sleep(2)
+        except Exception as exc:
+            _log.warning("ai-drill attempt %d failed: %s", attempt + 1, exc)
             if attempt == 0:
                 time.sleep(2)
     raise HTTPException(503, "Could not generate questions, try again")
