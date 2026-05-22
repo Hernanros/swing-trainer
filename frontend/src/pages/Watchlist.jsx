@@ -58,6 +58,16 @@ export default function Watchlist() {
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    if (!tagEditId) return
+    const close = (e) => {
+      if (!e.target.closest('.wl-tag-picker') && !e.target.closest('.wl-tag-add'))
+        setTagEditId(null)
+    }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [tagEditId])
+
   async function add(e) {
     e.preventDefault()
     if (!symbol.trim()) return
@@ -94,8 +104,9 @@ export default function Watchlist() {
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, tags: next } : i))
     try {
       await saveTags(item.id, next)
-    } catch {
+    } catch (e) {
       setItems(prev => prev.map(i => i.id === item.id ? { ...i, tags: current } : i))
+      setError('Failed to update tags')
     }
   }
 
@@ -176,26 +187,28 @@ export default function Watchlist() {
                 {(item.tags || []).map(t => (
                   <span key={t} className="wl-tag active" onClick={() => toggleTag(item, t)}>{t} ✕</span>
                 ))}
-                <button
-                  className="btn-sm btn-ghost wl-tag-add"
-                  onClick={() => setTagEditId(tagEditId === item.id ? null : item.id)}
-                >+ tag</button>
-                {tagEditId === item.id && (
-                  <div className="wl-tag-picker">
-                    {Object.entries(TAG_GROUPS).map(([group, tags]) => (
-                      <div key={group} className="wl-tag-group">
-                        <span className="wl-tag-group-label">{group}</span>
-                        {tags.map(tag => (
-                          <span
-                            key={tag}
-                            className={`wl-tag ${(item.tags || []).includes(tag) ? 'active' : ''}`}
-                            onClick={() => toggleTag(item, tag)}
-                          >{tag}</span>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <div style={{ position: 'relative', display: 'inline-block' }}>
+                  <button
+                    className="btn-sm btn-ghost wl-tag-add"
+                    onClick={() => setTagEditId(tagEditId === item.id ? null : item.id)}
+                  >+ tag</button>
+                  {tagEditId === item.id && (
+                    <div className="wl-tag-picker">
+                      {Object.entries(TAG_GROUPS).map(([group, tags]) => (
+                        <div key={group} className="wl-tag-group">
+                          <span className="wl-tag-group-label">{group}</span>
+                          {tags.map(tag => (
+                            <span
+                              key={tag}
+                              className={`wl-tag ${(item.tags || []).includes(tag) ? 'active' : ''}`}
+                              onClick={() => toggleTag(item, tag)}
+                            >{tag}</span>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ))}
