@@ -16,9 +16,12 @@ def _fetch_twelvedata_quote(symbol: str) -> dict:
     r = requests.get(url, params={"symbol": symbol, "apikey": _TWELVEDATA_KEY}, timeout=10)
     r.raise_for_status()
     d = r.json()
-    if d.get("status") == "error" or "price" not in d:
+    if d.get("status") == "error":
         raise ValueError(f"Twelve Data quote error for {symbol}: {d.get('message', 'unknown')}")
-    price = float(d["price"])
+    # free plan returns 'close' as current price, paid returns 'price'
+    price = float(d.get("price") or d.get("close") or 0)
+    if not price:
+        raise ValueError(f"No price in Twelve Data response for {symbol}")
     prev = float(d.get("previous_close") or price)
     change_pct = round((price - prev) / prev * 100, 2) if prev else 0.0
     return {
@@ -139,17 +142,17 @@ def get_quote(symbol: str) -> dict:
 
 
 def _fetch_quote(symbol: str) -> dict:
-    # 1. Twelve Data — primary
-    if _TWELVEDATA_KEY:
-        try:
-            return _fetch_twelvedata_quote(symbol)
-        except Exception:
-            pass
-
-    # 2. Finnhub
+    # 1. Finnhub — proven reliable for quotes
     if _FINNHUB_TOKEN:
         try:
             return _fetch_finnhub(symbol)
+        except Exception:
+            pass
+
+    # 2. Twelve Data — fallback
+    if _TWELVEDATA_KEY:
+        try:
+            return _fetch_twelvedata_quote(symbol)
         except Exception:
             pass
 
