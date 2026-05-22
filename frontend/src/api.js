@@ -50,6 +50,7 @@ export const api = {
     list:        ()         => request('GET',    '/watchlist/'),
     add:         (body)     => request('POST',   '/watchlist/', body),
     updateNotes: (id, body) => request('PUT',    `/watchlist/${id}/notes`, body),
+    updateTags:  (id, tags) => request('PUT',    `/watchlist/${id}/tags`, { tags }),
     remove:      (id)       => request('DELETE', `/watchlist/${id}`),
   },
   market: {

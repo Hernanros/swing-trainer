@@ -61,6 +61,25 @@ def update_notes(
     return item
 
 
+@router.put("/{item_id}/tags", response_model=WatchlistItemResponse)
+def update_tags(
+    item_id: int,
+    body: WatchlistTagsUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    item = db.query(WatchlistItem).filter(
+        WatchlistItem.id == item_id,
+        WatchlistItem.user_id == current_user.id,
+    ).first()
+    if not item:
+        raise HTTPException(404, "Item not found")
+    item.tags = _json.dumps(body.tags)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
 @router.delete("/{item_id}", status_code=204)
 def remove_from_watchlist(
     item_id: int,
