@@ -118,7 +118,15 @@ export default function Curriculum() {
     setDrillModal(null)
     setDrillQuestions(null)
     setDrillError('')
+    setDrillLoading(false)
   }
+
+  useEffect(() => {
+    if (!drillModal) return
+    const handler = (e) => { if (e.key === 'Escape') closeDrill() }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [drillModal])
 
   const total = CURRICULUM.reduce((s, g) => s + g.items.length, 0)
   const done  = checked.size
@@ -129,7 +137,7 @@ export default function Curriculum() {
       <div className="modal-overlay" onClick={closeDrill}>
         <div className="modal-box curr-drill-modal" onClick={e => e.stopPropagation()}>
           <div className="modal-header">
-            <span>Practice: {drillModal.context.slice(0, 60)}…</span>
+            <span>Practice: {drillModal.context.length > 60 ? drillModal.context.slice(0, 60) + '…' : drillModal.context}</span>
             <button className="btn-sm btn-ghost" onClick={closeDrill}>✕</button>
           </div>
           {drillLoading && <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)' }}>Generating questions…</div>}
