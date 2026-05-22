@@ -1,6 +1,7 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
 from datetime import datetime
+import json
 
 VALID_SKILLS = [
     "chart_reading",
@@ -125,21 +126,32 @@ class PlaybookRuleResponse(BaseModel):
 class WatchlistItemCreate(BaseModel):
     symbol: str
     notes: str = ""
-
+    tags: List[str] = []
     model_config = {"str_strip_whitespace": True}
-
 
 class WatchlistItemUpdate(BaseModel):
     notes: str = ""
 
+class WatchlistTagsUpdate(BaseModel):
+    tags: List[str]
 
 class WatchlistItemResponse(BaseModel):
     id: int
     symbol: str
     notes: str
+    tags: List[str] = []
     added_at: datetime
-
     model_config = {"from_attributes": True}
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def parse_tags(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return []
+        return v or []
 
 
 class RiskCalcSubmit(BaseModel):

@@ -90,6 +90,7 @@ class WatchlistItem(Base):
     symbol = Column(String, nullable=False)
     exchange = Column(String, nullable=True)
     notes = Column(Text, nullable=True)
+    tags = Column(Text, nullable=False, default='[]')
     added_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="watchlist")

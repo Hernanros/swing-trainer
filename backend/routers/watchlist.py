@@ -1,9 +1,10 @@
+import json as _json
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.auth import get_current_user
 from backend.models import WatchlistItem, User
-from backend.schemas import WatchlistItemCreate, WatchlistItemUpdate, WatchlistItemResponse
+from backend.schemas import WatchlistItemCreate, WatchlistItemUpdate, WatchlistTagsUpdate, WatchlistItemResponse
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
@@ -34,7 +35,7 @@ def add_to_watchlist(
     ).first()
     if existing:
         raise HTTPException(409, "Symbol already in watchlist")
-    item = WatchlistItem(user_id=current_user.id, symbol=symbol, notes=body.notes)
+    item = WatchlistItem(user_id=current_user.id, symbol=symbol, notes=body.notes, tags=_json.dumps(body.tags))
     db.add(item)
     db.commit()
     db.refresh(item)
