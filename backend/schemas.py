@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator, Field
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
 from datetime import datetime
 import json
@@ -133,12 +133,14 @@ class WatchlistItemUpdate(BaseModel):
     notes: str = ""
 
 class WatchlistTagsUpdate(BaseModel):
-    tags: List[str] = Field(..., max_length=20)
+    tags: List[str]
     model_config = {"str_strip_whitespace": True}
 
     @field_validator("tags")
     @classmethod
     def validate_tags(cls, v):
+        if len(v) > 20:
+            raise ValueError("Cannot add more than 20 tags")
         for tag in v:
             if len(tag) > 50:
                 raise ValueError(f"Tag '{tag[:20]}...' exceeds 50 character limit")

@@ -88,11 +88,15 @@ export default function Watchlist() {
     setItems(prev => prev.map(i => i.id === id ? { ...i, tags: updated.tags } : i))
   }
 
-  function toggleTag(item, tag) {
+  async function toggleTag(item, tag) {
     const current = item.tags || []
     const next = current.includes(tag) ? current.filter(t => t !== tag) : [...current, tag]
     setItems(prev => prev.map(i => i.id === item.id ? { ...i, tags: next } : i))
-    saveTags(item.id, next)
+    try {
+      await saveTags(item.id, next)
+    } catch {
+      setItems(prev => prev.map(i => i.id === item.id ? { ...i, tags: current } : i))
+    }
   }
 
   if (loading) return <div className="loading">Loading…</div>
