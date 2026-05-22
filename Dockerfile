@@ -4,7 +4,7 @@ FROM python:3.13-slim
 WORKDIR /srv
 RUN mkdir -p /app && mkdir -p /data
 COPY backend/requirements.txt ./
-RUN --mount=type=cache,target=/root/.cache/pip pip install -r requirements.txt
+RUN --mount=type=cache,id=pip-cache,target=/root/.cache/pip pip install -r requirements.txt
 COPY backend/ ./backend/
 COPY frontend/dist ./frontend/dist
 
