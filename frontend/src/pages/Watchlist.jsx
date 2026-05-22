@@ -2,6 +2,12 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { api } from '../api'
 import ChartModal from '../components/ChartModal'
 
+const TAG_GROUPS = {
+  Setup:    ['VCP', 'Cup & Handle', 'Flat Base', 'Breakout', 'Pullback'],
+  Stage:    ['Watching', 'Ready to Buy', 'Passed'],
+  Priority: ['High', 'Medium', 'Low'],
+}
+
 function QuoteCell({ symbol }) {
   const [quote, setQuote] = useState(null)
   const [err, setErr] = useState(false)
@@ -44,6 +50,7 @@ export default function Watchlist() {
   const [editNotes, setEditNotes] = useState('')
   const [loading, setLoading] = useState(true)
   const [chartSymbol, setChartSymbol] = useState(null)
+  const [tagEditId, setTagEditId] = useState(null)
 
   const load = useCallback(() => {
     api.watchlist.list().then(setItems).finally(() => setLoading(false))
@@ -71,9 +78,21 @@ export default function Watchlist() {
   }
 
   async function saveNotes(id) {
-    const updated = await api.watchlist.updateNotes(id, { notes: editNotes })
+    const updated = await api.watchlist.updateNotes(id, editNotes)
     setItems(prev => prev.map(i => i.id === id ? { ...i, notes: updated.notes } : i))
     setEditId(null)
+  }
+
+  async function saveTags(id, tags) {
+    const updated = await api.watchlist.updateTags(id, tags)
+    setItems(prev => prev.map(i => i.id === id ? { ...i, tags: updated.tags } : i))
+  }
+
+  function toggleTag(item, tag) {
+    const current = item.tags || []
+    const next = current.includes(tag) ? current.filter(t => t !== tag) : [...current, tag]
+    setItems(prev => prev.map(i => i.id === item.id ? { ...i, tags: next } : i))
+    saveTags(item.id, next)
   }
 
   if (loading) return <div className="loading">Loading…</div>
@@ -116,7 +135,7 @@ export default function Watchlist() {
             <span />
           </div>
           {items.map(item => (
-            <div className="wl-row" key={item.id}>
+            <div className="wl-row" key={item.id} style={{ position: 'relative' }}>
               <span
                 className="wl-symbol wl-symbol-link"
                 onClick={() => setChartSymbol(item.symbol)}
@@ -148,6 +167,32 @@ export default function Watchlist() {
               <span className="wl-actions">
                 <button className="btn-sm btn-ghost btn-danger" onClick={() => remove(item.id)}>✕</button>
               </span>
+              {/* Tag row */}
+              <div className="wl-tags-row">
+                {(item.tags || []).map(t => (
+                  <span key={t} className="wl-tag active" onClick={() => toggleTag(item, t)}>{t} ✕</span>
+                ))}
+                <button
+                  className="btn-sm btn-ghost wl-tag-add"
+                  onClick={() => setTagEditId(tagEditId === item.id ? null : item.id)}
+                >+ tag</button>
+                {tagEditId === item.id && (
+                  <div className="wl-tag-picker">
+                    {Object.entries(TAG_GROUPS).map(([group, tags]) => (
+                      <div key={group} className="wl-tag-group">
+                        <span className="wl-tag-group-label">{group}</span>
+                        {tags.map(tag => (
+                          <span
+                            key={tag}
+                            className={`wl-tag ${(item.tags || []).includes(tag) ? 'active' : ''}`}
+                            onClick={() => toggleTag(item, tag)}
+                          >{tag}</span>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>

@@ -49,7 +49,7 @@ export const api = {
   watchlist: {
     list:        ()         => request('GET',    '/watchlist/'),
     add:         (body)     => request('POST',   '/watchlist/', body),
-    updateNotes: (id, body) => request('PUT',    `/watchlist/${id}/notes`, body),
+    updateNotes: (id, notes) => request('PUT',    `/watchlist/${id}/notes`, { notes }),
     updateTags:  (id, tags) => request('PUT',    `/watchlist/${id}/tags`, { tags }),
     remove:      (id)       => request('DELETE', `/watchlist/${id}`),
   },
