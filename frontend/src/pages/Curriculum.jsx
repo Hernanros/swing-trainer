@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { api } from '../api'
+import QuizDrill from '../components/drills/QuizDrill'
 
 const CURRICULUM = [
   {
@@ -67,6 +68,10 @@ const CURRICULUM = [
 export default function Curriculum() {
   const [checked, setChecked] = useState(new Set())
   const [loading, setLoading] = useState(true)
+  const [drillModal, setDrillModal] = useState(null)
+  const [drillQuestions, setDrillQuestions] = useState(null)
+  const [drillLoading, setDrillLoading] = useState(false)
+  const [drillError, setDrillError] = useState('')
 
   useEffect(() => {
     api.curriculum.list()
@@ -87,10 +92,59 @@ export default function Curriculum() {
     }
   }
 
+  async function openDrill(item) {
+    setDrillModal({ topic: item.id, context: item.text })
+    setDrillQuestions(null)
+    setDrillError('')
+    setDrillLoading(true)
+    try {
+      const { questions } = await api.train.aiDrill({ topic: item.id, context: item.text })
+      // Normalize AI fields to QuizDrill's expected shape
+      const normalized = questions.map(q => ({
+        q: q.q,
+        options: q.choices,
+        correct: q.answer,
+        explanation: q.explanation,
+      }))
+      setDrillQuestions(normalized)
+    } catch (e) {
+      setDrillError(e.message || 'Could not generate questions, try again')
+    } finally {
+      setDrillLoading(false)
+    }
+  }
+
+  function closeDrill() {
+    setDrillModal(null)
+    setDrillQuestions(null)
+    setDrillError('')
+  }
+
   const total = CURRICULUM.reduce((s, g) => s + g.items.length, 0)
   const done  = checked.size
 
   return (
+    <>
+    {drillModal && (
+      <div className="modal-overlay" onClick={closeDrill}>
+        <div className="modal-box curr-drill-modal" onClick={e => e.stopPropagation()}>
+          <div className="modal-header">
+            <span>Practice: {drillModal.context.slice(0, 60)}…</span>
+            <button className="btn-sm btn-ghost" onClick={closeDrill}>✕</button>
+          </div>
+          {drillLoading && <div style={{ padding: '24px', textAlign: 'center', color: 'var(--muted)' }}>Generating questions…</div>}
+          {drillError && <div className="wl-error" style={{ padding: '16px' }}>{drillError}</div>}
+          {drillQuestions && (
+            <QuizDrill
+              questions={drillQuestions}
+              skill="custom"
+              drillKey="ai_drill"
+              onComplete={closeDrill}
+            />
+          )}
+        </div>
+      </div>
+    )}
     <div className="page">
       <div className="topbar">
         <div>
@@ -134,6 +188,11 @@ export default function Curriculum() {
                       onClick={e => e.stopPropagation()}
                       title="Search YouTube"
                     >▶</a>
+                    <button
+                      className="curr-practice-btn btn-sm btn-ghost"
+                      onClick={e => { e.preventDefault(); e.stopPropagation(); openDrill(item) }}
+                      title="Generate practice questions"
+                    >Practice</button>
                   </label>
                 ))}
               </div>
@@ -142,5 +201,6 @@ export default function Curriculum() {
         })
       )}
     </div>
+    </>
   )
 }

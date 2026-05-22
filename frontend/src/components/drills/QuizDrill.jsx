@@ -3,11 +3,12 @@ import { api } from '../../api'
 import { DRILL_QUESTIONS } from '../../data/drillQuestions'
 import DrillChart from '../DrillChart'
 
-export default function QuizDrill({ skill, drillKey, drillType, onComplete }) {
+export default function QuizDrill({ skill, drillKey, drillType, onComplete, questions: questionsProp }) {
   const questions = useMemo(() => {
+    if (questionsProp && questionsProp.length > 0) return questionsProp
     const bank = DRILL_QUESTIONS[drillKey] || DRILL_QUESTIONS[skill] || []
     return [...bank].sort(() => Math.random() - 0.5).slice(0, 5)
-  }, [skill, drillKey])
+  }, [skill, drillKey, questionsProp])
 
   const [idx, setIdx] = useState(0)
   const [selected, setSelected] = useState(null)
@@ -34,7 +35,9 @@ export default function QuizDrill({ skill, drillKey, drillType, onComplete }) {
       const finalScore = ((score + (selected === q.correct ? 1 : 0)) / questions.length) * 100
       setSubmitting(true)
       try {
-        await api.train.submitQuiz({ skill, drill_type: drillType, score: finalScore })
+        if (skill !== 'custom') {
+          await api.train.submitQuiz({ skill, drill_type: drillType, score: finalScore })
+        }
       } finally {
         setSubmitting(false)
         setDone(true)
