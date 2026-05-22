@@ -11,6 +11,7 @@ from backend.models import User, DrillResult, SkillScore
 from pydantic import BaseModel as _BaseModel, Field
 from backend.schemas import RiskCalcSubmit, DRILLS_PER_DAY, VALID_SKILLS
 from backend.services.claude import call_claude
+import anthropic as _anthropic
 
 _log = logging.getLogger(__name__)
 
@@ -183,6 +184,9 @@ The "answer" field is the 0-based index of the correct choice."""
                 raise ValueError("empty response")
             validated = [_AIQuestion(**item).model_dump() for item in questions]
             return {"questions": validated}
+        except _anthropic.AuthenticationError as exc:
+            _log.error("AI service misconfigured (auth): %s", exc)
+            raise HTTPException(500, "AI service is misconfigured")
         except (RuntimeError, ValueError) as exc:
             if "api_key" in str(exc).lower() or "not set" in str(exc).lower():
                 _log.error("AI service misconfigured: %s", exc)
