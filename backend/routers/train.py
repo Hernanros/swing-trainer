@@ -1,6 +1,8 @@
+import json
 import random
+import time
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.auth import get_current_user
@@ -13,6 +15,11 @@ class QuizSubmit(BaseModel):
     skill: str
     drill_type: str
     score: float   # 0 or 100
+
+
+class AIDrillRequest(BaseModel):
+    topic: str
+    context: str
 
 router = APIRouter(prefix="/train", tags=["train"])
 
@@ -135,3 +142,36 @@ def submit_quiz(
     db.commit()
     _update_skill_score(current_user.id, body.skill, db)
     return {"score": body.score}
+
+
+@router.post("/ai-drill")
+def generate_ai_drill(body: AIDrillRequest, current_user: User = Depends(get_current_user)):
+    from backend.services.claude import call_claude
+    prompt = f"""You are a swing trading quiz generator.
+
+Topic: {body.topic}
+Context: {body.context}
+
+Generate exactly 5 multiple-choice quiz questions testing understanding of this specific concept.
+Return ONLY a JSON array with this exact shape, no markdown, no explanation:
+[
+  {{
+    "q": "Question text",
+    "choices": ["Option A", "Option B", "Option C", "Option D"],
+    "answer": 0,
+    "explanation": "Why this answer is correct"
+  }}
+]
+The "answer" field is the 0-based index of the correct choice."""
+
+    for attempt in range(2):
+        try:
+            raw = call_claude(prompt, max_tokens=1500)
+            questions = json.loads(raw)
+            if not isinstance(questions, list) or len(questions) == 0:
+                raise ValueError("empty")
+            return {"questions": questions}
+        except Exception:
+            if attempt == 0:
+                time.sleep(2)
+    raise HTTPException(503, "Could not generate questions, try again")

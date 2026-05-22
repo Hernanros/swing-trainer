@@ -12,6 +12,20 @@ _SKILL_LABELS = {
 }
 
 
+def call_claude(prompt: str, max_tokens: int = 1000) -> str:
+    """Generic helper: sends a single user message and returns the text response."""
+    if not _api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+    from anthropic import Anthropic
+    client = Anthropic(api_key=_api_key)
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=max_tokens,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return message.content[0].text
+
+
 def generate_trade_debrief(trade) -> str:
     if not _api_key:
         return "[AI debrief unavailable — set ANTHROPIC_API_KEY to enable]"

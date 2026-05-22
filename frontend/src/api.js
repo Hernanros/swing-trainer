@@ -67,6 +67,7 @@ export const api = {
     generateRisk:()     => request('GET',  '/train/risk-calc/generate'),
     submitRisk:  (body) => request('POST', '/train/risk-calc/submit', body),
     submitQuiz:  (body) => request('POST', '/train/quiz/submit', body),
+    aiDrill:     (body) => request('POST', '/train/ai-drill', body),
   },
   tips: {
     daily:   ()     => request('GET',  '/tips/daily'),
