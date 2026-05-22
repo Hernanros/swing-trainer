@@ -1,9 +1,6 @@
-import csv
-import io
 import os
 import time
 import requests
-import yfinance as yf
 from datetime import datetime, timezone
 
 _cache: dict[str, tuple[float, dict]] = {}
@@ -11,18 +8,55 @@ _candle_cache: dict[str, tuple[float, list]] = {}
 _CACHE_TTL = 900  # 15 minutes
 
 _FINNHUB_TOKEN = os.getenv("FINNHUB_TOKEN", "")
+_TWELVEDATA_KEY = os.getenv("TWELVEDATA_API_KEY", "")
 
-_YF_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "*/*",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://finance.yahoo.com/",
-    "Origin": "https://finance.yahoo.com",
-}
+
+def _fetch_twelvedata_quote(symbol: str) -> dict:
+    url = "https://api.twelvedata.com/quote"
+    r = requests.get(url, params={"symbol": symbol, "apikey": _TWELVEDATA_KEY}, timeout=10)
+    r.raise_for_status()
+    d = r.json()
+    if d.get("status") == "error" or "price" not in d:
+        raise ValueError(f"Twelve Data quote error for {symbol}: {d.get('message', 'unknown')}")
+    price = float(d["price"])
+    prev = float(d.get("previous_close") or price)
+    change_pct = round((price - prev) / prev * 100, 2) if prev else 0.0
+    return {
+        "symbol":     symbol,
+        "price":      round(price, 2),
+        "prev_close": round(prev, 2),
+        "change_pct": change_pct,
+        "day_high":   round(float(d.get("high") or price), 2),
+        "day_low":    round(float(d.get("low") or price), 2),
+        "volume":     int(d["volume"]) if d.get("volume") else None,
+        "avg_volume": None,
+    }
+
+
+def _fetch_twelvedata_candles(symbol: str, range_days: int) -> list[dict]:
+    url = "https://api.twelvedata.com/time_series"
+    r = requests.get(url, params={
+        "symbol":     symbol,
+        "interval":   "1day",
+        "outputsize": range_days,
+        "apikey":     _TWELVEDATA_KEY,
+    }, timeout=15)
+    r.raise_for_status()
+    d = r.json()
+    if d.get("status") == "error" or "values" not in d:
+        raise ValueError(f"Twelve Data candles error for {symbol}: {d.get('message', 'unknown')}")
+    candles = []
+    for row in d["values"]:
+        ts = int(datetime.strptime(row["datetime"], "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
+        candles.append({
+            "time":   ts,
+            "open":   round(float(row["open"]),   2),
+            "high":   round(float(row["high"]),   2),
+            "low":    round(float(row["low"]),    2),
+            "close":  round(float(row["close"]),  2),
+            "volume": int(float(row.get("volume") or 0)),
+        })
+    return sorted(candles, key=lambda c: c["time"])
 
 
 def _fetch_finnhub(symbol: str) -> dict:
@@ -46,116 +80,6 @@ def _fetch_finnhub(symbol: str) -> dict:
     }
 
 
-def _fetch_yahoo(symbol: str) -> dict:
-    url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}"
-    resp = requests.get(
-        url,
-        headers=_YF_HEADERS,
-        params={"interval": "1d", "range": "1d"},
-        timeout=10,
-    )
-    resp.raise_for_status()
-    chart = resp.json().get("chart", {})
-    results = chart.get("result")
-    if not results:
-        err = chart.get("error") or {}
-        raise ValueError(f"No data for {symbol}: {err.get('description', 'unknown')}")
-    meta = results[0]["meta"]
-    price = meta.get("regularMarketPrice")
-    if price is None:
-        raise ValueError(f"No price returned for {symbol}")
-    prev = meta.get("previousClose") or meta.get("chartPreviousClose") or price
-    change_pct = round((price - prev) / prev * 100, 2) if prev else 0.0
-    return {
-        "symbol":     symbol,
-        "price":      round(price, 2),
-        "prev_close": round(float(prev), 2),
-        "change_pct": change_pct,
-        "day_high":   round(meta.get("regularMarketDayHigh") or price, 2),
-        "day_low":    round(meta.get("regularMarketDayLow") or price, 2),
-        "volume":     meta.get("regularMarketVolume"),
-        "avg_volume": meta.get("regularMarketVolume"),
-    }
-
-
-def _candles_yfinance(symbol: str, range_days: int) -> list[dict]:
-    """Fetch daily OHLCV via the yfinance library (handles Yahoo auth automatically)."""
-    ticker = yf.Ticker(symbol)
-    df = ticker.history(period=f"{range_days}d", interval="1d", auto_adjust=True)
-    if df is None or df.empty:
-        raise ValueError(f"No yfinance data for {symbol}")
-    candles = []
-    for ts, row in df.iterrows():
-        t = int(ts.timestamp())
-        candles.append({
-            "time":   t,
-            "open":   round(float(row["Open"]),   2),
-            "high":   round(float(row["High"]),   2),
-            "low":    round(float(row["Low"]),    2),
-            "close":  round(float(row["Close"]),  2),
-            "volume": int(row.get("Volume") or 0),
-        })
-    return sorted(candles, key=lambda c: c["time"])
-
-
-def _candles_stooq(symbol: str, range_days: int) -> list[dict]:
-    """Fetch daily OHLCV from stooq.com (no API key, cloud-friendly)."""
-    now = datetime.now(timezone.utc)
-    frm = datetime.fromtimestamp(time.time() - range_days * 86400, tz=timezone.utc)
-    d1 = frm.strftime("%Y%m%d")
-    d2 = now.strftime("%Y%m%d")
-    url = f"https://stooq.com/q/d/l/?s={symbol.lower()}.us&d1={d1}&d2={d2}&i=d"
-    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-    resp.raise_for_status()
-    text = resp.text.strip()
-    if not text or "No data" in text or text.startswith("<!"):
-        raise ValueError(f"No stooq data for {symbol}")
-    reader = csv.DictReader(io.StringIO(text))
-    candles = []
-    for row in reader:
-        try:
-            ts = int(datetime.strptime(row["Date"], "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp())
-            candles.append({
-                "time":   ts,
-                "open":   round(float(row["Open"]),  2),
-                "high":   round(float(row["High"]),  2),
-                "low":    round(float(row["Low"]),   2),
-                "close":  round(float(row["Close"]), 2),
-                "volume": int(float(row.get("Volume") or 0)),
-            })
-        except (KeyError, ValueError):
-            continue
-    if not candles:
-        raise ValueError(f"Empty stooq response for {symbol}")
-    return sorted(candles, key=lambda c: c["time"])
-
-
-def _candles_yahoo(symbol: str, range_days: int) -> list[dict]:
-    """Fetch daily OHLCV from Yahoo Finance v8."""
-    url = f"https://query2.finance.yahoo.com/v8/finance/chart/{symbol}"
-    resp = requests.get(url, headers=_YF_HEADERS, params={"interval": "1d", "range": f"{range_days}d"}, timeout=10)
-    resp.raise_for_status()
-    chart = resp.json().get("chart", {})
-    results = chart.get("result")
-    if not results:
-        raise ValueError(f"No candle data for {symbol}")
-    meta = results[0]["meta"]
-    timestamps = results[0].get("timestamp", [])
-    indicators = results[0].get("indicators", {}).get("quote", [{}])[0]
-    price = meta.get("regularMarketPrice", 0)
-    opens   = indicators.get("open",   [price] * len(timestamps))
-    highs   = indicators.get("high",   [price] * len(timestamps))
-    lows    = indicators.get("low",    [price] * len(timestamps))
-    closes  = indicators.get("close",  [price] * len(timestamps))
-    volumes = indicators.get("volume", [0]     * len(timestamps))
-    candles = []
-    for t, o, h, l, c, v in zip(timestamps, opens, highs, lows, closes, volumes):
-        if None not in (o, h, l, c):
-            candles.append({"time": t, "open": round(o, 2), "high": round(h, 2),
-                             "low": round(l, 2), "close": round(c, 2), "volume": v or 0})
-    return candles
-
-
 def get_candles(symbol: str, range_days: int = 60) -> list[dict]:
     symbol = symbol.upper()
     cache_key = f"{symbol}:{range_days}"
@@ -171,7 +95,14 @@ def get_candles(symbol: str, range_days: int = 60) -> list[dict]:
 
 
 def _fetch_candles(symbol: str, range_days: int) -> list[dict]:
-    # 1. Finnhub (free tier usually blocks candles, but try)
+    # 1. Twelve Data — primary, works from cloud IPs
+    if _TWELVEDATA_KEY:
+        try:
+            return _fetch_twelvedata_candles(symbol, range_days)
+        except Exception:
+            pass
+
+    # 2. Finnhub (free tier usually blocks candles, but try)
     if _FINNHUB_TOKEN:
         try:
             now = int(time.time())
@@ -191,14 +122,7 @@ def _fetch_candles(symbol: str, range_days: int) -> list[dict]:
         except Exception:
             pass
 
-    # 2. yfinance — handles Yahoo auth, no raw rate-limit issues
-    try:
-        return _candles_yfinance(symbol, range_days)
-    except Exception:
-        pass
-
-    # 3. stooq.com — last resort
-    return _candles_stooq(symbol, range_days)
+    raise ValueError(f"No candle data available for {symbol}")
 
 
 def get_quote(symbol: str) -> dict:
@@ -209,10 +133,24 @@ def get_quote(symbol: str) -> dict:
         if now - ts < _CACHE_TTL:
             return data
 
-    if _FINNHUB_TOKEN:
-        data = _fetch_finnhub(symbol)
-    else:
-        data = _fetch_yahoo(symbol)
-
+    data = _fetch_quote(symbol)
     _cache[symbol] = (now, data)
     return data
+
+
+def _fetch_quote(symbol: str) -> dict:
+    # 1. Twelve Data — primary
+    if _TWELVEDATA_KEY:
+        try:
+            return _fetch_twelvedata_quote(symbol)
+        except Exception:
+            pass
+
+    # 2. Finnhub
+    if _FINNHUB_TOKEN:
+        try:
+            return _fetch_finnhub(symbol)
+        except Exception:
+            pass
+
+    raise ValueError(f"No quote data available for {symbol}")
