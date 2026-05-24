@@ -1053,6 +1053,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "Three or more touches at the same price without breaking lower confirms strong horizontal support. Each bounce means buyers stepped in there. The more times a level is tested and holds, the more significant it becomes — until it breaks.",
+      chartKey: 'sr_triple_touch',
     },
     {
       q: "A stock breaks below a support level it held for 10 weeks on heavy volume. What is the most likely next development?",
@@ -1064,6 +1065,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "Support-becomes-resistance is one of the most reliable concepts in technical analysis. Once buyers who defended a level get trapped below it, they become sellers on any bounce back to that price. This is called a polarity flip.",
+      chartKey: 'sr_support_break',
     },
     {
       q: "You're watching a stock approach a prior all-time high of $120 that it has never traded above. How should you treat $120?",
@@ -1075,6 +1077,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "Prior highs create resistance because investors who bought near the top are eager to sell to break even. At an all-time high there are no trapped sellers above — once that resistance is cleared convincingly on volume, the path of least resistance is open air.",
+      chartKey: 'sr_all_time_high',
     },
     {
       q: "A stock pulls back to its prior breakout level ($95) which was resistance for months. On low volume it bounces sharply. What is the correct interpretation?",
@@ -1086,6 +1089,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "A retest of the prior breakout level on low volume is textbook healthy action. Low volume on the pullback means sellers aren't aggressive — they're not rushing to unload. A sharp bounce off old resistance confirms that polarity has flipped to support.",
+      chartKey: 'sr_polarity_flip',
     },
     {
       q: "Which of the following is the BEST entry strategy when trading a bounce off horizontal support?",
@@ -1097,6 +1101,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "Buying at support blindly is dangerous — support can always fail. Waiting for a reversal candle (hammer, bullish engulfing) at the level provides confirmation that buyers are actually stepping in. It costs a few cents but dramatically improves your win rate and makes your stop placement obvious (below the reversal candle low).",
+      chartKey: 'sr_bounce_entry',
     },
     {
       q: "A stock has two clear prior highs at $55 and $56.50. You expect resistance. Where do you place your target when buying a breakout through this zone?",
@@ -1108,6 +1113,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "A resistance zone (multiple highs at slightly different prices) should be treated as a zone to power through, not a pinpoint exit level. Use measured-move targets (base depth added to breakout) for your profit target. Splitting hairs over $55 vs $56.50 causes premature exits on strong moves.",
+      chartKey: 'sr_resistance_zone',
     },
     {
       q: "Volume spikes to 4× average as a stock hits major support. What does this tell you?",
@@ -1119,6 +1125,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "High volume at support alone is ambiguous. It means a fight is happening — lots of buyers AND sellers. The close tells the story: if the stock closes near the high of that bar, buyers won. If it closes near the low, sellers won and the support is likely to break. Always wait for the close.",
+      chartKey: 'sr_volume_spike',
     },
   ],
 
@@ -1133,6 +1140,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "An ascending channel is two parallel upward-sloping trendlines containing price. The lower line connects the lows (support), the upper line connects the highs (resistance). It's a bullish structure — price is making progress. Buy near the lower channel line, take partial profits near the upper line.",
+      chartKey: 'ch_ascending',
     },
     {
       q: "How do you correctly draw the second (upper) trendline of an ascending channel?",
@@ -1144,6 +1152,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "The upper channel line must be parallel to the lower trendline — that's what makes it a channel. You anchor it to the first major swing high. This creates a measured price envelope. If the upper line isn't parallel, you have a wedge (converging) or an undefined pattern, not a channel.",
+      chartKey: 'ch_parallel_lines',
     },
     {
       q: "A stock has been in a clean ascending channel for 8 weeks. Price pulls back to the lower channel line on low volume. What is the optimal action for a swing trader?",
@@ -1155,6 +1164,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "The lower channel line is dynamic support in an uptrend. A pullback to it on low volume (no aggressive selling) is a textbook swing entry. Your risk is well-defined: stop just below the channel line. Your target is the upper channel line. This is the channel trading playbook.",
+      chartKey: 'ch_pullback_lower',
     },
     {
       q: "A stock breaks ABOVE the upper line of an ascending channel on heavy volume. What does this typically signal?",
@@ -1166,6 +1176,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "A breakout above the upper channel line on heavy volume is a bullish acceleration signal, not a sell. It means buyers are more aggressive than the channel's pace predicted. This is often the start of a climax-style run. Hold or add — don't sell into strength unless you see climax topping signs.",
+      chartKey: 'ch_upper_breakout',
     },
     {
       q: "A stock breaks BELOW the lower line of a descending channel on heavy volume after a prolonged downtrend. What should a swing trader do?",
@@ -1177,6 +1188,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "A break below channel support in a downtrend on heavy volume is a continuation signal, not a reversal. It means selling is accelerating. Swing traders should stay away. Only when price stabilizes and shows reversal structure (higher lows, volume dry-up) should you consider the long side.",
+      chartKey: 'ch_descending_break',
     },
     {
       q: "What is the key difference between a rising wedge and an ascending channel?",
@@ -1188,6 +1200,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "This distinction is critical. In a rising wedge, the upper and lower trendlines both slope up but converge — the range is shrinking, meaning the rallies are getting smaller relative to the pullbacks. This is bearish. In an ascending channel, the lines are parallel — consistent range, consistent trend. Knowing which one you're in changes the trade direction completely.",
+      chartKey: 'ch_wedge_vs_channel',
     },
     {
       q: "You've identified a clean ascending channel with a channel height of $8 (from $42 lower line to $50 upper line). The stock breaks out above $50 on volume. What is your measured-move price target?",
@@ -1199,6 +1212,7 @@ export const DRILL_QUESTIONS = {
       ],
       correct: 0,
       explanation: "The measured-move technique for a channel breakout: take the height of the channel and project it above the breakout point. Channel height = $50 − $42 = $8. Breakout point = $50. Target = $50 + $8 = $58. This is the same principle used for measuring flag poles and cup bases — always project the prior structure's range.",
+      chartKey: 'ch_measured_move',
     },
   ],
 }
