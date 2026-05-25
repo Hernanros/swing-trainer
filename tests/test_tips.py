@@ -116,3 +116,15 @@ def test_generate_ask_tip_uses_system_block_when_context_provided():
     system = call_kwargs["system"]
     assert isinstance(system, list)
     assert any(block.get("cache_control") == {"type": "ephemeral"} for block in system)
+
+
+def test_generate_ask_tip_no_context_uses_string_system():
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = MagicMock(content=[MagicMock(text="answer")])
+    with patch("backend.services.claude._api_key", "test-key"), \
+         patch("anthropic.Anthropic", return_value=mock_client):
+        from backend.services.claude import generate_ask_tip
+        generate_ask_tip("What is a breakout?")
+    call_kwargs = mock_client.messages.create.call_args[1]
+    system = call_kwargs["system"]
+    assert isinstance(system, str)

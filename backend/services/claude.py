@@ -100,21 +100,24 @@ def generate_daily_tip(skill: str, context: str = "") -> str:
         )
     from anthropic import Anthropic
     client = Anthropic(api_key=_api_key)
-    role = (
+    base_role = (
         f"You are an expert swing trading coach giving a quick daily tip to a student "
         f"who needs to improve their {label} skill. "
         "Write one concise, practical tip (3-5 sentences) they can apply today. "
-        "Reference this student's actual trade patterns where relevant. "
         "Focus on a single actionable insight. Be specific, not generic. "
         "Plain text only — no bullet points, no headers."
     )
     if context:
+        role = base_role.replace(
+            "Focus on a single actionable insight.",
+            "Reference this student's actual trade patterns where relevant. Focus on a single actionable insight."
+        )
         system = [
             {"type": "text", "text": context, "cache_control": {"type": "ephemeral"}},
             {"type": "text", "text": role},
         ]
     else:
-        system = role
+        system = base_role
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=200,
@@ -129,19 +132,22 @@ def generate_ask_tip(question: str, context: str = "") -> str:
         return "[AI answers unavailable — set ANTHROPIC_API_KEY to enable]"
     from anthropic import Anthropic
     client = Anthropic(api_key=_api_key)
-    role = (
+    base_role = (
         "You are an expert swing trading coach. "
         "Answer concisely and practically in 3-5 sentences. "
-        "Reference this student's actual trade patterns where relevant. "
         "Focus on actionable advice specific to swing trading. Plain text only."
     )
     if context:
+        role = base_role.replace(
+            "Focus on actionable advice",
+            "Reference this student's actual trade patterns where relevant. Focus on actionable advice"
+        )
         system = [
             {"type": "text", "text": context, "cache_control": {"type": "ephemeral"}},
             {"type": "text", "text": role},
         ]
     else:
-        system = role
+        system = base_role
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=300,
