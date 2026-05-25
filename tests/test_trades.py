@@ -232,3 +232,28 @@ def test_ai_debrief_stores_result(user_id):
         resp = client.post(f"/api/trades/{trade_id}/ai-debrief")
     assert resp.status_code == 200
     assert resp.json()["ai_debrief"] == "AI analysis here."
+
+
+def test_close_trade_schedules_background_debrief(user_id):
+    trade_id = client.post("/api/trades/", json=VALID_LONG).json()["id"]
+    with patch("backend.routers.trades._generate_debrief_bg") as mock_bg:
+        client.put(f"/api/trades/{trade_id}/close", json={
+            "exit_price": 930.0,
+            "debrief": "Held to target.",
+        })
+    mock_bg.assert_called_once_with(trade_id)
+
+
+def test_generate_debrief_bg_writes_ai_debrief(user_id):
+    from backend.routers.trades import _generate_debrief_bg
+    trade_id = client.post("/api/trades/", json=VALID_LONG).json()["id"]
+    client.put(f"/api/trades/{trade_id}/close", json={
+        "exit_price": 930.0,
+        "debrief": "Good trade.",
+    })
+    # Patch SessionLocal to use the test DB session
+    with patch("backend.routers.trades.SessionLocal", return_value=_Session()), \
+         patch("backend.services.claude.generate_trade_debrief", return_value="AI result"):
+        _generate_debrief_bg(trade_id)
+    trade = client.get("/api/trades/").json()[0]
+    assert trade["ai_debrief"] == "AI result"

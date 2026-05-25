@@ -1,13 +1,29 @@
+import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
-from backend.database import get_db
+from backend.database import get_db, SessionLocal
 from backend.auth import get_current_user
 from backend.models import Trade, User
 from backend.schemas import TradeCreate, TradeClose, TradeResponse
 from backend.services import claude as claude_service
 
 router = APIRouter(prefix="/trades", tags=["trades"])
+logger = logging.getLogger(__name__)
+
+
+def _generate_debrief_bg(trade_id: int) -> None:
+    db = SessionLocal()
+    try:
+        trade = db.query(Trade).filter(Trade.id == trade_id).first()
+        if not trade or trade.status != "closed" or trade.ai_debrief:
+            return
+        trade.ai_debrief = claude_service.generate_trade_debrief(trade)
+        db.commit()
+    except Exception:
+        logger.exception("Background debrief failed for trade %s", trade_id)
+    finally:
+        db.close()
 
 
 def _to_response(t: Trade) -> dict:
@@ -90,6 +106,7 @@ def open_trade(
 def close_trade(
     trade_id: int,
     body: TradeClose,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -121,6 +138,7 @@ def close_trade(
     trade.status = "closed"
     db.commit()
     db.refresh(trade)
+    background_tasks.add_task(_generate_debrief_bg, trade_id)
     return _to_response(trade)
 
 
