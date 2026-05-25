@@ -143,6 +143,26 @@ def _fetch_candles(symbol: str, range_days: int, date: Optional[str] = None) -> 
     raise ValueError(f"No candle data available for {symbol}")
 
 
+def get_next_earnings(symbol: str) -> dict:
+    if not _FINNHUB_TOKEN:
+        raise ValueError("FINNHUB_TOKEN not configured")
+    symbol = symbol.upper()
+    url = "https://finnhub.io/api/v1/calendar/earnings"
+    r = requests.get(url, params={"symbol": symbol, "token": _FINNHUB_TOKEN}, timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    from datetime import date as date_type
+    today = date_type.today().isoformat()
+    upcoming = [
+        e for e in data.get("earningsCalendar", [])
+        if e.get("date", "") >= today
+    ]
+    if not upcoming:
+        raise ValueError(f"No upcoming earnings found for {symbol}")
+    upcoming.sort(key=lambda e: e["date"])
+    return {"date": upcoming[0]["date"]}
+
+
 def get_quote(symbol: str) -> dict:
     symbol = symbol.upper()
     now = time.time()

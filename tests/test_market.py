@@ -1,4 +1,4 @@
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -84,3 +84,44 @@ def test_fetch_candles_passes_end_date_to_twelvedata():
          patch("backend.services.market._fetch_twelvedata_candles", return_value=FAKE_CANDLES) as mock_td:
         mkt._fetch_candles("NVDA", 60, date="2026-01-15")
     mock_td.assert_called_once_with("NVDA", 60, end_date="2026-01-25")
+
+
+def test_get_next_earnings_returns_date():
+    from backend.services.market import get_next_earnings
+    fake_response = {
+        "earningsCalendar": [
+            {"date": "2099-07-25", "symbol": "AAPL", "epsEstimate": 1.2}
+        ]
+    }
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = fake_response
+    mock_resp.raise_for_status = MagicMock()
+    with patch("backend.services.market.requests.get", return_value=mock_resp), \
+         patch("backend.services.market._FINNHUB_TOKEN", "fake-token"):
+        result = get_next_earnings("AAPL")
+    assert result == {"date": "2099-07-25"}
+
+
+def test_get_next_earnings_raises_when_no_token():
+    from backend.services.market import get_next_earnings
+    with patch("backend.services.market._FINNHUB_TOKEN", ""):
+        try:
+            get_next_earnings("AAPL")
+            assert False, "Expected ValueError"
+        except ValueError as e:
+            assert "FINNHUB_TOKEN" in str(e)
+
+
+def test_get_next_earnings_raises_when_no_upcoming():
+    from backend.services.market import get_next_earnings
+    fake_response = {"earningsCalendar": []}
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = fake_response
+    mock_resp.raise_for_status = MagicMock()
+    with patch("backend.services.market.requests.get", return_value=mock_resp), \
+         patch("backend.services.market._FINNHUB_TOKEN", "fake-token"):
+        try:
+            get_next_earnings("AAPL")
+            assert False, "Expected ValueError"
+        except ValueError:
+            pass
