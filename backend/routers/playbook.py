@@ -1,3 +1,4 @@
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from backend.database import get_db
@@ -26,7 +27,7 @@ def list_setups(
 
 @router.get("/rules", response_model=list[PlaybookRuleResponse])
 def list_rules(
-    setup_type: str | None = None,
+    setup_type: Optional[str] = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

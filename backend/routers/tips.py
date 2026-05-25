@@ -34,7 +34,8 @@ def get_daily_tip(user: User = Depends(get_current_user), db: Session = Depends(
         active = json.loads(user.active_skills)
         skill = active[0] if active else "risk_sizing"
 
-    content = claude_service.generate_daily_tip(skill)
+    context = claude_service.get_user_coaching_context(user, db)
+    content = claude_service.generate_daily_tip(skill, context=context)
     tip = Tip(user_id=user.id, skill_area=skill, content=content)
     db.add(tip)
     db.commit()
@@ -50,7 +51,8 @@ def get_library(user: User = Depends(get_current_user), db: Session = Depends(ge
 
 @router.post("/ask")
 def ask_tip(body: AskBody, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    content = claude_service.generate_ask_tip(body.question)
+    context = claude_service.get_user_coaching_context(user, db)
+    content = claude_service.generate_ask_tip(body.question, context=context)
     tip = Tip(user_id=user.id, question=body.question, content=content)
     db.add(tip)
     db.commit()

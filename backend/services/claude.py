@@ -91,7 +91,7 @@ Be direct and specific. No generic advice."""
     return message.content[0].text
 
 
-def generate_daily_tip(skill: str) -> str:
+def generate_daily_tip(skill: str, context: str = "") -> str:
     label = _SKILL_LABELS.get(skill, skill.replace("_", " ").title())
     if not _api_key:
         return (
@@ -100,32 +100,52 @@ def generate_daily_tip(skill: str) -> str:
         )
     from anthropic import Anthropic
     client = Anthropic(api_key=_api_key)
+    role = (
+        f"You are an expert swing trading coach giving a quick daily tip to a student "
+        f"who needs to improve their {label} skill. "
+        "Write one concise, practical tip (3-5 sentences) they can apply today. "
+        "Reference this student's actual trade patterns where relevant. "
+        "Focus on a single actionable insight. Be specific, not generic. "
+        "Plain text only — no bullet points, no headers."
+    )
+    if context:
+        system = [
+            {"type": "text", "text": context, "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": role},
+        ]
+    else:
+        system = role
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=200,
-        messages=[{"role": "user", "content": (
-            f"You are an expert swing trading coach giving a quick daily tip to a student "
-            f"who needs to improve their {label} skill. "
-            "Write one concise, practical tip (3-5 sentences) they can apply today. "
-            "Focus on a single actionable insight. Be specific, not generic. "
-            "Plain text only — no bullet points, no headers."
-        )}],
+        system=system,
+        messages=[{"role": "user", "content": f"Give me a daily tip on {label}."}],
     )
     return message.content[0].text
 
 
-def generate_ask_tip(question: str) -> str:
+def generate_ask_tip(question: str, context: str = "") -> str:
     if not _api_key:
         return "[AI answers unavailable — set ANTHROPIC_API_KEY to enable]"
     from anthropic import Anthropic
     client = Anthropic(api_key=_api_key)
+    role = (
+        "You are an expert swing trading coach. "
+        "Answer concisely and practically in 3-5 sentences. "
+        "Reference this student's actual trade patterns where relevant. "
+        "Focus on actionable advice specific to swing trading. Plain text only."
+    )
+    if context:
+        system = [
+            {"type": "text", "text": context, "cache_control": {"type": "ephemeral"}},
+            {"type": "text", "text": role},
+        ]
+    else:
+        system = role
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=300,
-        messages=[{"role": "user", "content": (
-            f'You are an expert swing trading coach. A student asks: "{question}"\n\n'
-            "Answer concisely and practically in 3-5 sentences. "
-            "Focus on actionable advice specific to swing trading. Plain text only."
-        )}],
+        system=system,
+        messages=[{"role": "user", "content": question}],
     )
     return message.content[0].text
