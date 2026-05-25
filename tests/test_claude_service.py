@@ -82,3 +82,16 @@ def test_context_no_data_returns_profile_only(db, user):
     assert "Alice" in ctx
     assert "Recent trades" not in ctx
     assert "Skill scores" not in ctx
+
+
+def test_context_handles_null_r_multiple(db, user):
+    db.add(Trade(
+        user_id=user.id, symbol="MSFT", direction="long",
+        entry=300.0, stop=290.0, target=330.0,
+        shares=5, status="closed", date="2026-05-10",
+        pnl=-50.0, r_multiple=None,
+    ))
+    db.commit()
+    ctx = get_user_coaching_context(user, db)
+    assert "MSFT" in ctx
+    assert "?R" in ctx

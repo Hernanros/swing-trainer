@@ -40,7 +40,8 @@ def get_user_coaching_context(user, db) -> str:
         for t in trades:
             checklist = f", checklist {t.checklist_score:.0f}%" if t.checklist_score is not None else ""
             setup = f" {t.setup_type}" if t.setup_type else ""
-            lines.append(f"  {t.symbol} {t.direction}{setup}: {t.r_multiple:.2f}R{checklist}")
+            r_str = f"{t.r_multiple:.2f}R" if t.r_multiple is not None else "?R"
+            lines.append(f"  {t.symbol} {t.direction}{setup}: {r_str}{checklist}")
 
     return "\n".join(lines)
 
