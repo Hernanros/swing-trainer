@@ -21,6 +21,7 @@ def _generate_debrief_bg(trade_id: int) -> None:
         trade.ai_debrief = claude_service.generate_trade_debrief(trade)
         db.commit()
     except Exception:
+        db.rollback()
         logger.exception("Background debrief failed for trade %s", trade_id)
     finally:
         db.close()

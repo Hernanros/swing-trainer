@@ -252,7 +252,7 @@ def test_generate_debrief_bg_writes_ai_debrief(user_id):
         "debrief": "Good trade.",
     })
     # Patch SessionLocal to use the test DB session
-    with patch("backend.routers.trades.SessionLocal", return_value=_Session()), \
+    with patch("backend.routers.trades.SessionLocal", side_effect=_Session), \
          patch("backend.services.claude.generate_trade_debrief", return_value="AI result"):
         _generate_debrief_bg(trade_id)
     trade = client.get("/api/trades/").json()[0]
