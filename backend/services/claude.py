@@ -12,6 +12,39 @@ _SKILL_LABELS = {
 }
 
 
+def get_user_coaching_context(user, db) -> str:
+    from backend.models import SkillScore, Trade
+
+    lines = [f"User: {user.name} | Stage: {user.trading_stage} | Budget: {user.time_budget}"]
+
+    scores = db.query(SkillScore).filter(SkillScore.user_id == user.id).all()
+    if scores:
+        weakest = min(scores, key=lambda s: s.score)
+        weakest_label = _SKILL_LABELS.get(weakest.skill, weakest.skill)
+        score_parts = [
+            f"{_SKILL_LABELS.get(s.skill, s.skill)}: {s.score:.0f}"
+            for s in sorted(scores, key=lambda s: s.score)
+        ]
+        lines.append(f"Weakest skill: {weakest_label} ({weakest.score:.0f})")
+        lines.append("Skill scores: " + ", ".join(score_parts))
+
+    trades = (
+        db.query(Trade)
+        .filter(Trade.user_id == user.id, Trade.status == "closed")
+        .order_by(Trade.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    if trades:
+        lines.append(f"\nRecent trades (last {len(trades)} closed):")
+        for t in trades:
+            checklist = f", checklist {t.checklist_score:.0f}%" if t.checklist_score is not None else ""
+            setup = f" {t.setup_type}" if t.setup_type else ""
+            lines.append(f"  {t.symbol} {t.direction}{setup}: {t.r_multiple:.2f}R{checklist}")
+
+    return "\n".join(lines)
+
+
 def call_claude(prompt: str, max_tokens: int = 1000) -> str:
     """Generic helper: sends a single user message and returns the text response."""
     if not _api_key:
