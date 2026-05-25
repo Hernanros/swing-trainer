@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { api } from '../api'
 import TradeDrawer from '../components/TradeDrawer'
+import TradeChart from '../components/TradeChart'
 
 function statusBadge(trade) {
   if (trade.status === 'open') return { label: 'OPEN', color: 'var(--yellow)' }
@@ -24,6 +25,7 @@ export default function Journal() {
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
   const [drawer, setDrawer]   = useState(null) // null | { mode:'open' } | { mode:'close', trade }
+  const [expandedId, setExpandedId] = useState(null)
 
   const loadTrades = useCallback(async () => {
     try {
@@ -83,7 +85,15 @@ export default function Journal() {
               {trades.map(t => {
                 const badge = statusBadge(t)
                 return (
-                  <tr key={t.id} style={{ borderBottom: '1px solid var(--border)', verticalAlign: 'middle' }}>
+                  <tr
+                    key={t.id}
+                    onClick={t.status === 'closed' ? () => setExpandedId(expandedId === t.id ? null : t.id) : undefined}
+                    style={{
+                      borderBottom: '1px solid var(--border)',
+                      verticalAlign: 'middle',
+                      cursor: t.status === 'closed' ? 'pointer' : 'default',
+                    }}
+                  >
                     <td style={{ padding: '9px 10px', color: 'var(--muted)' }}>
                       {new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </td>
@@ -117,6 +127,42 @@ export default function Journal() {
                       )}
                     </td>
                   </tr>
+                  {t.status === 'closed' && expandedId === t.id && (
+                    <tr key={`${t.id}-detail`}>
+                      <td
+                        colSpan={9}
+                        style={{ padding: '0 10px 16px', background: 'var(--surface)' }}
+                      >
+                        <TradeChart
+                          symbol={t.symbol}
+                          date={t.trade_date || t.created_at.split('T')[0]}
+                          entry={t.entry_price}
+                          stop={t.stop_price}
+                          target={t.target_price}
+                          exit={t.exit_price}
+                        />
+                        {t.ai_debrief && (
+                          <div style={{ color: 'var(--text2)', fontSize: 13, marginTop: 8 }}>
+                            <span style={{ color: 'var(--accent)', fontWeight: 600 }}>AI Debrief: </span>
+                            {t.ai_debrief}
+                          </div>
+                        )}
+                        {t.checklist_score != null && (
+                          <div style={{
+                            fontSize: 12,
+                            marginTop: 6,
+                            color: t.checklist_score >= 80
+                              ? 'var(--green)'
+                              : t.checklist_score >= 50
+                                ? 'var(--yellow)'
+                                : 'var(--red)',
+                          }}>
+                            Checklist: {t.checklist_score.toFixed(0)}%
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  )}
                 )
               })}
             </tbody>
