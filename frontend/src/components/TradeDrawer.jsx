@@ -17,6 +17,7 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose }) {
     debrief:      '',
     setup_type:   '',
     practice:     false,
+    trade_date:   new Date().toISOString().split('T')[0],
   })
   const [errors, setErrors]   = useState({})
   const [saving, setSaving]   = useState(false)
@@ -97,6 +98,7 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose }) {
             setup_type:      form.setup_type || null,
             practice:        form.practice,
             checklist_score: computeChecklistScore(),
+            trade_date:      form.trade_date || null,
           }
         : {
             exit_price: +form.exit_price,
@@ -157,6 +159,8 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose }) {
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {mode === 'open' && <>
             {field('symbol', 'Symbol', 'text', 'NVDA')}
+
+            {field('trade_date', 'Trade Date', 'date')}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label style={{ fontSize: 11, color: 'var(--muted)' }}>Setup Type</label>
