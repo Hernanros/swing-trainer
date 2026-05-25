@@ -107,9 +107,11 @@ def get_candles(symbol: str, range_days: int = 60, date: Optional[str] = None) -
 
 def _fetch_candles(symbol: str, range_days: int, date: Optional[str] = None) -> list[dict]:
     end_date = None
+    to_ts = None
     if date:
         trade_dt = datetime.strptime(date, "%Y-%m-%d")
         end_date = (trade_dt + timedelta(days=10)).strftime("%Y-%m-%d")
+        to_ts = int((trade_dt + timedelta(days=10)).timestamp())
 
     # 1. Twelve Data — primary, works from cloud IPs
     if _TWELVEDATA_KEY:
@@ -121,16 +123,12 @@ def _fetch_candles(symbol: str, range_days: int, date: Optional[str] = None) -> 
     # 2. Finnhub (free tier usually blocks candles, but try)
     if _FINNHUB_TOKEN:
         try:
-            if date:
-                trade_dt = datetime.strptime(date, "%Y-%m-%d")
-                to_ts = int((trade_dt + timedelta(days=10)).timestamp())
-            else:
-                to_ts = int(time.time())
-            frm = to_ts - range_days * 86400
+            finnhub_to = to_ts if to_ts is not None else int(time.time())
+            frm = finnhub_to - range_days * 86400
             url = "https://finnhub.io/api/v1/stock/candle"
             r = requests.get(url, params={
                 "symbol": symbol, "resolution": "D",
-                "from": frm, "to": to_ts, "token": _FINNHUB_TOKEN,
+                "from": frm, "to": finnhub_to, "token": _FINNHUB_TOKEN,
             }, timeout=10)
             r.raise_for_status()
             d = r.json()

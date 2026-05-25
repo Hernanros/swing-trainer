@@ -1,4 +1,3 @@
-import json
 from unittest.mock import patch
 import pytest
 from fastapi.testclient import TestClient
@@ -54,24 +53,24 @@ FAKE_CANDLES = [
 
 def test_candles_without_date_returns_data():
     # Patch at get_candles level — avoids env-key guards in service internals
-    with patch("backend.services.market.get_candles", return_value=FAKE_CANDLES):
+    with patch("backend.routers.market.get_candles", return_value=FAKE_CANDLES):
         resp = client.get("/api/market/candles/NVDA")
     assert resp.status_code == 200
     assert len(resp.json()) == 2
 
 
 def test_candles_with_date_returns_data():
-    with patch("backend.services.market.get_candles", return_value=FAKE_CANDLES):
+    with patch("backend.routers.market.get_candles", return_value=FAKE_CANDLES):
         resp = client.get("/api/market/candles/NVDA?date=2026-01-15&days=60")
     assert resp.status_code == 200
     assert len(resp.json()) == 2
 
 
 def test_candles_with_date_are_cached_in_db():
-    with patch("backend.services.market.get_candles", return_value=FAKE_CANDLES):
+    with patch("backend.routers.market.get_candles", return_value=FAKE_CANDLES):
         client.get("/api/market/candles/NVDA?date=2026-01-15&days=60")
     # Second call — get_candles should NOT be called (served from DB cache)
-    with patch("backend.services.market.get_candles", side_effect=Exception("should not call")) as mock:
+    with patch("backend.routers.market.get_candles", side_effect=Exception("should not call")) as mock:
         resp = client.get("/api/market/candles/NVDA?date=2026-01-15&days=60")
         mock.assert_not_called()
     assert resp.status_code == 200
