@@ -1,7 +1,8 @@
 import os
 import time
 import requests
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 _cache: dict[str, tuple[float, dict]] = {}
 _candle_cache: dict[str, tuple[float, list]] = {}
@@ -36,14 +37,17 @@ def _fetch_twelvedata_quote(symbol: str) -> dict:
     }
 
 
-def _fetch_twelvedata_candles(symbol: str, range_days: int) -> list[dict]:
+def _fetch_twelvedata_candles(symbol: str, range_days: int, end_date: Optional[str] = None) -> list[dict]:
     url = "https://api.twelvedata.com/time_series"
-    r = requests.get(url, params={
+    params = {
         "symbol":     symbol,
         "interval":   "1day",
         "outputsize": range_days,
         "apikey":     _TWELVEDATA_KEY,
-    }, timeout=15)
+    }
+    if end_date:
+        params["end_date"] = end_date
+    r = requests.get(url, params=params, timeout=15)
     r.raise_for_status()
     d = r.json()
     if d.get("status") == "error" or "values" not in d:
@@ -83,8 +87,12 @@ def _fetch_finnhub(symbol: str) -> dict:
     }
 
 
-def get_candles(symbol: str, range_days: int = 60) -> list[dict]:
+def get_candles(symbol: str, range_days: int = 60, date: Optional[str] = None) -> list[dict]:
     symbol = symbol.upper()
+    if date:
+        # historical requests bypass the in-memory cache — router handles DB caching
+        return _fetch_candles(symbol, range_days, date=date)
+
     cache_key = f"{symbol}:{range_days}"
     now = time.time()
     if cache_key in _candle_cache:
@@ -97,23 +105,32 @@ def get_candles(symbol: str, range_days: int = 60) -> list[dict]:
     return candles
 
 
-def _fetch_candles(symbol: str, range_days: int) -> list[dict]:
+def _fetch_candles(symbol: str, range_days: int, date: Optional[str] = None) -> list[dict]:
+    end_date = None
+    if date:
+        trade_dt = datetime.strptime(date, "%Y-%m-%d")
+        end_date = (trade_dt + timedelta(days=10)).strftime("%Y-%m-%d")
+
     # 1. Twelve Data — primary, works from cloud IPs
     if _TWELVEDATA_KEY:
         try:
-            return _fetch_twelvedata_candles(symbol, range_days)
+            return _fetch_twelvedata_candles(symbol, range_days, end_date=end_date)
         except Exception:
             pass
 
     # 2. Finnhub (free tier usually blocks candles, but try)
     if _FINNHUB_TOKEN:
         try:
-            now = int(time.time())
-            frm = now - range_days * 86400
+            if date:
+                trade_dt = datetime.strptime(date, "%Y-%m-%d")
+                to_ts = int((trade_dt + timedelta(days=10)).timestamp())
+            else:
+                to_ts = int(time.time())
+            frm = to_ts - range_days * 86400
             url = "https://finnhub.io/api/v1/stock/candle"
             r = requests.get(url, params={
                 "symbol": symbol, "resolution": "D",
-                "from": frm, "to": now, "token": _FINNHUB_TOKEN,
+                "from": frm, "to": to_ts, "token": _FINNHUB_TOKEN,
             }, timeout=10)
             r.raise_for_status()
             d = r.json()
