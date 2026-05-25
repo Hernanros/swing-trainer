@@ -47,6 +47,7 @@ def _to_response(t: Trade) -> dict:
         "r_multiple":      t.r_multiple,
         "ai_debrief":      t.ai_debrief,
         "created_at":      t.created_at,
+        "trade_date":      t.trade_date,
     }
 
 
@@ -93,6 +94,7 @@ def open_trade(
         pre_note=body.pre_note,
         status="open",
         date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        trade_date=body.trade_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         setup_type=body.setup_type or None,
         practice=body.practice,
         checklist_score=body.checklist_score,

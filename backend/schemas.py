@@ -59,6 +59,7 @@ class TradeCreate(BaseModel):
     setup_type: Optional[str] = None
     practice: bool = False
     checklist_score: Optional[float] = None  # 0.0–100.0
+    trade_date: Optional[str] = None         # YYYY-MM-DD; defaults to today if omitted
 
     model_config = {"str_strip_whitespace": True}
 
@@ -91,6 +92,7 @@ class TradeResponse(BaseModel):
     r_multiple: Optional[float]
     ai_debrief: Optional[str]
     created_at: datetime
+    trade_date: Optional[str] = None
 
 
 VALID_TIERS = {"must", "should", "context"}

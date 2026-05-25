@@ -265,3 +265,19 @@ def test_generate_debrief_bg_writes_ai_debrief(user_id):
         _generate_debrief_bg(trade_id)
     trade = client.get("/api/trades/").json()[0]
     assert trade["ai_debrief"] == "AI result"
+
+
+def test_open_trade_with_trade_date_stores_it(user_id):
+    body = {**VALID_LONG, "trade_date": "2026-01-15"}
+    resp = client.post("/api/trades/", json=body)
+    assert resp.status_code == 201
+    assert resp.json()["trade_date"] == "2026-01-15"
+
+
+def test_open_trade_without_trade_date_falls_back_to_date(user_id):
+    resp = client.post("/api/trades/", json=VALID_LONG)
+    assert resp.status_code == 201
+    data = resp.json()
+    # trade_date should be set to today's date string (YYYY-MM-DD format)
+    assert data["trade_date"] is not None
+    assert len(data["trade_date"]) == 10  # YYYY-MM-DD
