@@ -45,6 +45,14 @@ def reset_db():
 
 client = TestClient(app)
 
+
+def test_trade_date_column_exists():
+    from sqlalchemy import inspect
+    inspector = inspect(_engine)
+    cols = {c["name"] for c in inspector.get_columns("trades")}
+    assert "trade_date" in cols, "trade_date column missing from trades table"
+
+
 VALID_USER = {
     "name": "Hernan",
     "trading_stage": "small_money",

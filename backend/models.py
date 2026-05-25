@@ -52,6 +52,7 @@ class Trade(Base):
     pnl = Column(Float, nullable=True)
     r_multiple = Column(Float, nullable=True)
     ai_debrief = Column(Text, nullable=True)
+    trade_date = Column(String, nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="trades")
