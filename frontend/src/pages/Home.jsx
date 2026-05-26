@@ -186,7 +186,7 @@ export default function Home() {
             <button
               className="btn-sm btn-ghost"
               style={{ marginTop: 8, alignSelf: 'flex-start' }}
-              onClick={() => navigate(`/train?skill=${weakestSkill.skill}`)}
+              onClick={() => navigate(`/train?skill=${encodeURIComponent(weakestSkill.skill)}`)}
             >
               Practice {SKILL_LABEL[weakestSkill.skill] || weakestSkill.skill} →
             </button>
