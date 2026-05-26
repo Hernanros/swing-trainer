@@ -1,7 +1,7 @@
 import os
 import time
 import requests
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 
 _cache: dict[str, tuple[float, dict]] = {}
@@ -151,11 +151,10 @@ def get_next_earnings(symbol: str) -> dict:
     r = requests.get(url, params={"symbol": symbol, "token": _FINNHUB_TOKEN}, timeout=10)
     r.raise_for_status()
     data = r.json()
-    from datetime import date as date_type
-    today = date_type.today().isoformat()
+    today = date.today().isoformat()
     upcoming = [
         e for e in data.get("earningsCalendar", [])
-        if e.get("date", "") >= today
+        if isinstance(e.get("date"), str) and e["date"] >= today
     ]
     if not upcoming:
         raise ValueError(f"No upcoming earnings found for {symbol}")

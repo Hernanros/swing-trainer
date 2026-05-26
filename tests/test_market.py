@@ -105,11 +105,8 @@ def test_get_next_earnings_returns_date():
 def test_get_next_earnings_raises_when_no_token():
     from backend.services.market import get_next_earnings
     with patch("backend.services.market._FINNHUB_TOKEN", ""):
-        try:
+        with pytest.raises(ValueError, match="FINNHUB_TOKEN"):
             get_next_earnings("AAPL")
-            assert False, "Expected ValueError"
-        except ValueError as e:
-            assert "FINNHUB_TOKEN" in str(e)
 
 
 def test_get_next_earnings_raises_when_no_upcoming():
@@ -120,8 +117,5 @@ def test_get_next_earnings_raises_when_no_upcoming():
     mock_resp.raise_for_status = MagicMock()
     with patch("backend.services.market.requests.get", return_value=mock_resp), \
          patch("backend.services.market._FINNHUB_TOKEN", "fake-token"):
-        try:
+        with pytest.raises(ValueError, match="No upcoming earnings"):
             get_next_earnings("AAPL")
-            assert False, "Expected ValueError"
-        except ValueError:
-            pass
