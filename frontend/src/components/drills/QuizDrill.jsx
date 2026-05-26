@@ -16,6 +16,7 @@ export default function QuizDrill({ skill, drillKey, drillType, onComplete, ques
   const [score, setScore] = useState(0)
   const [done, setDone] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [answers, setAnswers] = useState([])
 
   const q = questions[idx]
 
@@ -24,6 +25,7 @@ export default function QuizDrill({ skill, drillKey, drillType, onComplete, ques
     setSelected(i)
     setAnswered(true)
     if (i === q.correct) setScore(s => s + 1)
+    setAnswers(prev => [...prev, { q_idx: idx, chosen: i, answer: q.correct, is_correct: i === q.correct }])
   }
 
   async function next() {
@@ -36,7 +38,7 @@ export default function QuizDrill({ skill, drillKey, drillType, onComplete, ques
       setSubmitting(true)
       try {
         if (skill !== 'custom') {
-          await api.train.submitQuiz({ skill, drill_type: drillType, score: finalScore })
+          await api.train.submitQuiz({ skill, drill_type: drillType, score: finalScore, detail: answers })
         }
       } finally {
         setSubmitting(false)
