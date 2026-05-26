@@ -16,7 +16,10 @@ def get_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    all_trades = db.query(Trade).filter(Trade.user_id == current_user.id).all()
+    all_trades = db.query(Trade).filter(
+        Trade.user_id == current_user.id,
+        Trade.practice == False,
+    ).all()
     closed = [t for t in all_trades if t.status == "closed"]
 
     wins = [t for t in closed if t.pnl is not None and t.pnl >= 0]
@@ -56,6 +59,7 @@ def get_patterns(
     closed_count = db.query(Trade).filter(
         Trade.user_id == current_user.id,
         Trade.status == "closed",
+        Trade.practice == False,
     ).count()
 
     min_trades_met = closed_count >= 5
@@ -70,6 +74,7 @@ def get_patterns(
         new_trade_count = db.query(Trade).filter(
             Trade.user_id == current_user.id,
             Trade.status == "closed",
+            Trade.practice == False,
             Trade.created_at > last_analyzed_at,
         ).count()
         can_analyze = min_trades_met and new_trade_count >= 1
@@ -101,6 +106,7 @@ def analyze_patterns(
     closed_count = db.query(Trade).filter(
         Trade.user_id == current_user.id,
         Trade.status == "closed",
+        Trade.practice == False,
     ).count()
 
     if closed_count < 5:
@@ -112,6 +118,7 @@ def analyze_patterns(
         new_count = db.query(Trade).filter(
             Trade.user_id == current_user.id,
             Trade.status == "closed",
+            Trade.practice == False,
             Trade.created_at > last_analyzed_at,
         ).count()
         if new_count == 0:

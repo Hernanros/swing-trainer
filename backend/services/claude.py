@@ -31,7 +31,7 @@ def get_user_coaching_context(user, db) -> str:
 
     trades = (
         db.query(Trade)
-        .filter(Trade.user_id == user.id, Trade.status == "closed")
+        .filter(Trade.user_id == user.id, Trade.status == "closed", Trade.practice == False)
         .order_by(Trade.created_at.desc())
         .limit(20)
         .all()
