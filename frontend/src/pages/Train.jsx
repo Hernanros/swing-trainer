@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 import { api } from '../api'
 import RiskCalcDrill from '../components/drills/RiskCalcDrill'
@@ -19,6 +20,18 @@ export default function Train() {
   }, [])
 
   useEffect(() => { loadToday() }, [loadToday])
+
+  const [searchParams] = useSearchParams()
+
+  useEffect(() => {
+    if (loading) return
+    const skillParam = searchParams.get('skill')
+    if (!skillParam) return
+    const matches = Object.entries(DRILL_META).filter(([, meta]) => meta.skill === skillParam)
+    if (matches.length === 0) return
+    const [key] = matches[Math.floor(Math.random() * matches.length)]
+    setActiveDrill(key)
+  }, [loading, searchParams])
 
   function drillComplete() {
     setActiveDrill(null)

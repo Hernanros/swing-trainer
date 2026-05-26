@@ -88,6 +88,10 @@ export default function Home() {
 
   const activeSkillScores = skills.filter(sk => user.active_skills.includes(sk.skill))
 
+  const weakestSkill = activeSkillScores.length > 0
+    ? activeSkillScores.reduce((a, b) => a.score <= b.score ? a : b)
+    : null
+
   return (
     <div className="page">
       <div className="topbar">
@@ -177,6 +181,15 @@ export default function Home() {
                 </div>
               </div>
             ))
+          )}
+          {weakestSkill && (
+            <button
+              className="btn-sm btn-ghost"
+              style={{ marginTop: 8, alignSelf: 'flex-start' }}
+              onClick={() => navigate(`/train?skill=${weakestSkill.skill}`)}
+            >
+              Practice {SKILL_LABEL[weakestSkill.skill] || weakestSkill.skill} →
+            </button>
           )}
         </div>
 
