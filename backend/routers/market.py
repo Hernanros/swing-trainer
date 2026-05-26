@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -64,7 +64,7 @@ def earnings(symbol: str, db: Session = Depends(get_db)):
     row = db.query(CachedContent).filter(CachedContent.key == cache_key).first()
     if row:
         age = (now - row.generated_at.replace(tzinfo=timezone.utc)).total_seconds()
-        if age < 86400:
+        if 0 <= age < 86400:
             return json.loads(row.content)
     try:
         result = get_next_earnings(symbol)

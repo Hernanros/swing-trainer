@@ -137,3 +137,10 @@ def test_earnings_endpoint_caches_in_db():
         mock.assert_not_called()
     assert resp.status_code == 200
     assert resp.json() == {"date": "2099-07-25"}
+
+
+def test_earnings_endpoint_returns_404_when_not_found():
+    with patch("backend.routers.market.get_next_earnings",
+               side_effect=ValueError("No upcoming earnings found for BADSYM")):
+        resp = client.get("/api/market/earnings/BADSYM")
+    assert resp.status_code == 404
