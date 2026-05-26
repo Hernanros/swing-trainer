@@ -119,3 +119,21 @@ def test_get_next_earnings_raises_when_no_upcoming():
          patch("backend.services.market._FINNHUB_TOKEN", "fake-token"):
         with pytest.raises(ValueError, match="No upcoming earnings"):
             get_next_earnings("AAPL")
+
+
+def test_earnings_endpoint_returns_date():
+    with patch("backend.routers.market.get_next_earnings", return_value={"date": "2099-07-25"}):
+        resp = client.get("/api/market/earnings/AAPL")
+    assert resp.status_code == 200
+    assert resp.json() == {"date": "2099-07-25"}
+
+
+def test_earnings_endpoint_caches_in_db():
+    with patch("backend.routers.market.get_next_earnings", return_value={"date": "2099-07-25"}):
+        client.get("/api/market/earnings/AAPL")
+    # Second call — get_next_earnings should NOT be called (served from cache)
+    with patch("backend.routers.market.get_next_earnings", side_effect=Exception("should not call")) as mock:
+        resp = client.get("/api/market/earnings/AAPL")
+        mock.assert_not_called()
+    assert resp.status_code == 200
+    assert resp.json() == {"date": "2099-07-25"}

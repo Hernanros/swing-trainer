@@ -1,11 +1,12 @@
 import json
 import logging
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import CachedContent
-from backend.services.market import get_quote, get_candles
+from backend.services.market import get_quote, get_candles, get_next_earnings
 
 router = APIRouter(prefix="/market", tags=["market"])
 _log = logging.getLogger(__name__)
@@ -53,3 +54,30 @@ def candles(
     except Exception as e:
         _log.exception("Candles fetch failed for %s", symbol)
         raise HTTPException(503, f"Candle data unavailable for {symbol}: {e}")
+
+
+@router.get("/earnings/{symbol}")
+def earnings(symbol: str, db: Session = Depends(get_db)):
+    symbol = symbol.upper()
+    cache_key = f"earnings:{symbol}"
+    now = datetime.now(timezone.utc)
+    row = db.query(CachedContent).filter(CachedContent.key == cache_key).first()
+    if row:
+        age = (now - row.generated_at.replace(tzinfo=timezone.utc)).total_seconds()
+        if age < 86400:
+            return json.loads(row.content)
+    try:
+        result = get_next_earnings(symbol)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+    except Exception as e:
+        _log.exception("Earnings fetch failed for %s", symbol)
+        raise HTTPException(503, f"Earnings unavailable for {symbol}: {e}")
+    content = json.dumps(result)
+    if row:
+        row.content = content
+        row.generated_at = now
+    else:
+        db.add(CachedContent(key=cache_key, content=content, generated_at=now))
+    db.commit()
+    return result
