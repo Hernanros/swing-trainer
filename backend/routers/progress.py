@@ -60,16 +60,21 @@ def get_patterns(
 
     min_trades_met = closed_count >= 5
     last_analyzed_at = None
-    can_analyze = min_trades_met
-
     if patterns:
         last_analyzed_at = max(p.detected_at for p in patterns)
+
+    # NOTE: uses Trade.created_at as proxy for close time (no closed_at column).
+    # Trades opened before last analysis but closed after it won't trigger can_analyze.
+    # Acceptable for the current schema; revisit if closed_at is added to Trade.
+    if last_analyzed_at is not None:
         new_trade_count = db.query(Trade).filter(
             Trade.user_id == current_user.id,
             Trade.status == "closed",
             Trade.created_at > last_analyzed_at,
         ).count()
         can_analyze = min_trades_met and new_trade_count >= 1
+    else:
+        can_analyze = min_trades_met
 
     return {
         "patterns": [
@@ -119,7 +124,7 @@ def analyze_patterns(
         _log.exception("Pattern analysis failed for user %s", current_user.id)
         raise HTTPException(503, "Pattern analysis unavailable — try again later.")
 
-    db.query(AIPattern).filter(AIPattern.user_id == current_user.id).delete()
+    db.query(AIPattern).filter(AIPattern.user_id == current_user.id).delete(synchronize_session=False)
     now = datetime.now(timezone.utc)
     new_rows = []
     for p in parsed:
