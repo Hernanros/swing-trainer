@@ -57,6 +57,7 @@ export const api = {
     quote:   (symbol, days) => request('GET', `/market/quote/${encodeURIComponent(symbol)}`),
     candles: (symbol, days = 60, date = null) =>
       request('GET', `/market/candles/${encodeURIComponent(symbol)}?days=${days}${date ? `&date=${date}` : ''}`),
+    earnings: (symbol) => request('GET', `/market/earnings/${encodeURIComponent(symbol)}`),
   },
   curriculum: {
     list:    ()       => request('GET',    '/curriculum/'),

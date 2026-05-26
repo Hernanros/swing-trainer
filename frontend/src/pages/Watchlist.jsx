@@ -41,6 +41,30 @@ function QuoteCell({ symbol }) {
   )
 }
 
+function EarningsCell({ symbol }) {
+  const [data, setData]       = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.market.earnings(symbol)
+      .then(d => { setData(d); setLoading(false) })
+      .catch(() => setLoading(false))
+  }, [symbol])
+
+  if (loading) return <span className="wl-price muted">…</span>
+  if (!data?.date) return <span className="wl-price muted" style={{ fontSize: 11 }}>—</span>
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const erDate = new Date(data.date + 'T00:00:00')
+  const daysUntil = Math.round((erDate - today) / 86400000)
+
+  if (daysUntil < 0)  return <span className="wl-price muted" style={{ fontSize: 11 }}>—</span>
+  if (daysUntil === 0) return <span className="wl-price red"  style={{ fontSize: 11 }}>ER today</span>
+  if (daysUntil === 1) return <span className="wl-price red"  style={{ fontSize: 11 }}>ER tomorrow</span>
+  return <span className="wl-price" style={{ color: 'var(--yellow)', fontSize: 11 }}>ER in {daysUntil}d</span>
+}
+
 export default function Watchlist() {
   const [items, setItems] = useState([])
   const [symbol, setSymbol] = useState('')
@@ -146,6 +170,7 @@ export default function Watchlist() {
           <div className="wl-header">
             <span>Symbol</span>
             <span>Price / Change</span>
+            <span>Earnings</span>
             <span>Notes</span>
             <span />
           </div>
@@ -157,6 +182,7 @@ export default function Watchlist() {
                 title="View chart"
               >{item.symbol}</span>
               <QuoteCell symbol={item.symbol} />
+              <EarningsCell symbol={item.symbol} />
               <span className="wl-notes">
                 {editId === item.id ? (
                   <span className="wl-edit-row">
