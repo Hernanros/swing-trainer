@@ -40,7 +40,7 @@ export default function Progress() {
       setStats(s)
       setSkills(sk)
       setPatternData(pd)
-    }).catch(() => {}).finally(() => setLoading(false))
+    }).catch(err => { console.error('Progress load failed:', err) }).finally(() => setLoading(false))
   }, [user.id])
 
   if (loading) return <div className="loading">Loading…</div>
@@ -57,7 +57,7 @@ export default function Progress() {
     api.progress.analyze()
       .then(newPatterns => {
         setPatternData(prev => ({
-          ...prev,
+          ...(prev || {}),
           patterns:         newPatterns,
           last_analyzed_at: new Date().toISOString(),
           can_analyze:      false,
@@ -146,7 +146,7 @@ export default function Progress() {
           <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{analyzeErr}</div>
         )}
 
-        {(!patternData || patternData.patterns.length === 0) && !analyzing && (
+        {!patternData?.patterns?.length && !analyzing && (
           <div style={{ color: 'var(--dim)', fontSize: 13 }}>
             {patternData?.min_trades_met
               ? 'No analysis yet — click "Analyze my trading" to get started.'
