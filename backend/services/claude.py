@@ -155,3 +155,56 @@ def generate_ask_tip(question: str, context: str = "") -> str:
         messages=[{"role": "user", "content": question}],
     )
     return message.content[0].text
+
+
+def generate_pattern_analysis(context: str) -> list:
+    """Call Claude Haiku with coaching context; return list of {severity, pattern_text} dicts.
+
+    Raises RuntimeError if API key missing.
+    Raises ValueError if Claude returns unparseable XML or zero valid patterns.
+    """
+    if not _api_key:
+        raise RuntimeError("ANTHROPIC_API_KEY is not set")
+    import xml.etree.ElementTree as ET
+    from anthropic import Anthropic
+    client = Anthropic(api_key=_api_key)
+    system = [
+        {"type": "text", "text": context, "cache_control": {"type": "ephemeral"}},
+        {"type": "text", "text": (
+            "You are an expert swing trading coach analyzing a student's trade journal. "
+            "Be direct and specific. Reference actual numbers from the data."
+        )},
+    ]
+    user_message = (
+        "Analyze this trader's journal and identify 3 to 5 recurring behavioral patterns.\n"
+        "Return ONLY this XML — no other text:\n\n"
+        "<patterns>\n"
+        "  <pattern severity=\"problem\">...</pattern>\n"
+        "  <pattern severity=\"watch\">...</pattern>\n"
+        "  <pattern severity=\"strength\">...</pattern>\n"
+        "</patterns>\n\n"
+        "Severity rules:\n"
+        "- problem: a repeated mistake actively costing edge (cite trade counts)\n"
+        "- watch: a tendency worth monitoring that isn't clearly hurting yet\n"
+        "- strength: a discipline the trader is consistently getting right\n\n"
+        "Each pattern must be one sentence, specific, and cite actual numbers where possible."
+    )
+    message = client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=400,
+        system=system,
+        messages=[{"role": "user", "content": user_message}],
+    )
+    raw = message.content[0].text.strip()
+    root = ET.fromstring(raw)
+    if root.tag != "patterns":
+        raise ValueError(f"Unexpected XML root tag: {root.tag!r}")
+    patterns = []
+    for elem in root.findall("pattern"):
+        severity = elem.get("severity", "").strip()
+        text = (elem.text or "").strip()
+        if severity in ("problem", "watch", "strength") and text:
+            patterns.append({"severity": severity, "pattern_text": text})
+    if not patterns:
+        raise ValueError("No valid patterns parsed from Claude response")
+    return patterns
