@@ -1,4 +1,5 @@
 import os
+import xml.etree.ElementTree as ET
 
 _api_key = os.getenv("ANTHROPIC_API_KEY")
 
@@ -165,7 +166,6 @@ def generate_pattern_analysis(context: str) -> list:
     """
     if not _api_key:
         raise RuntimeError("ANTHROPIC_API_KEY is not set")
-    import xml.etree.ElementTree as ET
     from anthropic import Anthropic
     client = Anthropic(api_key=_api_key)
     system = [
@@ -191,12 +191,17 @@ def generate_pattern_analysis(context: str) -> list:
     )
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
-        max_tokens=400,
+        max_tokens=600,
         system=system,
         messages=[{"role": "user", "content": user_message}],
     )
     raw = message.content[0].text.strip()
-    root = ET.fromstring(raw)
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError as exc:
+        raise ValueError(f"Claude returned unparseable XML: {exc}") from exc
     if root.tag != "patterns":
         raise ValueError(f"Unexpected XML root tag: {root.tag!r}")
     patterns = []
