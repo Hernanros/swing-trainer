@@ -24,17 +24,22 @@ function StatTile({ label, value, suffix = '', color }) {
 
 export default function Progress() {
   const { user } = useUser()
-  const [stats, setStats]     = useState(null)
-  const [skills, setSkills]   = useState([])
-  const [loading, setLoading] = useState(true)
+  const [stats, setStats]             = useState(null)
+  const [skills, setSkills]           = useState([])
+  const [patternData, setPatternData] = useState(null)
+  const [analyzing, setAnalyzing]     = useState(false)
+  const [analyzeErr, setAnalyzeErr]   = useState(null)
+  const [loading, setLoading]         = useState(true)
 
   useEffect(() => {
     Promise.all([
       api.progress.stats(),
       api.users.skills(user.id),
-    ]).then(([s, sk]) => {
+      api.progress.patterns(),
+    ]).then(([s, sk, pd]) => {
       setStats(s)
       setSkills(sk)
+      setPatternData(pd)
     }).catch(() => {}).finally(() => setLoading(false))
   }, [user.id])
 
@@ -45,6 +50,22 @@ export default function Progress() {
 
   const avgRColor = stats?.avg_r == null ? null
     : stats.avg_r >= 1 ? 'var(--green)' : stats.avg_r >= 0 ? 'var(--yellow)' : 'var(--red)'
+
+  function handleAnalyze() {
+    setAnalyzing(true)
+    setAnalyzeErr(null)
+    api.progress.analyze()
+      .then(newPatterns => {
+        setPatternData(prev => ({
+          ...prev,
+          patterns:         newPatterns,
+          last_analyzed_at: new Date().toISOString(),
+          can_analyze:      false,
+        }))
+      })
+      .catch(() => setAnalyzeErr('Analysis failed — try again'))
+      .finally(() => setAnalyzing(false))
+  }
 
   return (
     <div className="page">
@@ -102,6 +123,66 @@ export default function Progress() {
         <div style={{ fontSize: 11, color: 'var(--dim)', marginTop: 4 }}>
           Skill scores update as you complete drills in Phase 4.
         </div>
+      </div>
+
+      {/* AI Pattern Analysis */}
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <div style={{ fontWeight: 700, color: 'var(--text)', fontSize: 14 }}>AI Pattern Analysis</div>
+          {patternData?.min_trades_met && (
+            <button
+              className="btn-primary"
+              style={{ fontSize: 12, padding: '4px 12px' }}
+              disabled={!patternData.can_analyze || analyzing}
+              title={!patternData.can_analyze ? 'Add a new trade first' : ''}
+              onClick={handleAnalyze}
+            >
+              {analyzing ? 'Analyzing…' : 'Analyze my trading'}
+            </button>
+          )}
+        </div>
+
+        {analyzeErr && (
+          <div style={{ color: 'var(--red)', fontSize: 12, marginBottom: 8 }}>{analyzeErr}</div>
+        )}
+
+        {(!patternData || patternData.patterns.length === 0) && !analyzing && (
+          <div style={{ color: 'var(--dim)', fontSize: 13 }}>
+            {patternData?.min_trades_met
+              ? 'No analysis yet — click "Analyze my trading" to get started.'
+              : 'Log at least 5 closed trades to unlock pattern analysis.'}
+          </div>
+        )}
+
+        {patternData?.patterns.map((p, i) => {
+          const color = p.severity === 'problem' ? 'var(--red)'
+            : p.severity === 'watch' ? 'var(--yellow)'
+            : 'var(--green)'
+          return (
+            <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 8 }}>
+              <span style={{
+                background: color,
+                color: '#000',
+                borderRadius: 4,
+                padding: '2px 6px',
+                fontSize: 10,
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+                marginTop: 2,
+              }}>
+                {p.severity}
+              </span>
+              <span style={{ color: 'var(--text2)', fontSize: 13 }}>{p.pattern_text}</span>
+            </div>
+          )
+        })}
+
+        {patternData?.last_analyzed_at && (
+          <div style={{ color: 'var(--dim)', fontSize: 11, marginTop: 8 }}>
+            Last analyzed: {new Date(patternData.last_analyzed_at).toLocaleDateString()} · based on {patternData.trade_range}
+          </div>
+        )}
       </div>
 
       {stats && (

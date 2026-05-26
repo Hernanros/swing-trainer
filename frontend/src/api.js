@@ -44,7 +44,9 @@ export const api = {
     deleteRule: (id)       => request('DELETE', `/playbook/rules/${id}`),
   },
   progress: {
-    stats: () => request('GET', '/progress/stats'),
+    stats:    () => request('GET', '/progress/stats'),
+    patterns: () => request('GET', '/progress/patterns'),
+    analyze:  () => request('POST', '/progress/analyze-patterns'),
   },
   watchlist: {
     list:        ()         => request('GET',    '/watchlist/'),
