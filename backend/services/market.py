@@ -147,14 +147,20 @@ def get_next_earnings(symbol: str) -> dict:
     if not _FINNHUB_TOKEN:
         raise ValueError("FINNHUB_TOKEN not configured")
     symbol = symbol.upper()
+    today = date.today()
+    to_date = today + timedelta(days=365)
     url = "https://finnhub.io/api/v1/calendar/earnings"
-    r = requests.get(url, params={"symbol": symbol, "token": _FINNHUB_TOKEN}, timeout=10)
+    r = requests.get(url, params={
+        "symbol": symbol,
+        "from": today.isoformat(),
+        "to": to_date.isoformat(),
+        "token": _FINNHUB_TOKEN,
+    }, timeout=10)
     r.raise_for_status()
     data = r.json()
-    today = date.today().isoformat()
     upcoming = [
         e for e in data.get("earningsCalendar", [])
-        if isinstance(e.get("date"), str) and e["date"] >= today
+        if isinstance(e.get("date"), str) and e["date"] >= today.isoformat()
     ]
     if not upcoming:
         raise ValueError(f"No upcoming earnings found for {symbol}")

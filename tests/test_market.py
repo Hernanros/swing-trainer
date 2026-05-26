@@ -144,3 +144,21 @@ def test_earnings_endpoint_returns_404_when_not_found():
                side_effect=ValueError("No upcoming earnings found for BADSYM")):
         resp = client.get("/api/market/earnings/BADSYM")
     assert resp.status_code == 404
+
+
+def test_earnings_endpoint_returns_503_on_unexpected_error():
+    with patch("backend.routers.market.get_next_earnings",
+               side_effect=RuntimeError("upstream failure")):
+        resp = client.get("/api/market/earnings/AAPL")
+    assert resp.status_code == 503
+
+
+def test_get_next_earnings_raises_when_response_missing_calendar_key():
+    from backend.services.market import get_next_earnings
+    mock_resp = MagicMock()
+    mock_resp.json.return_value = {}
+    mock_resp.raise_for_status = MagicMock()
+    with patch("backend.services.market.requests.get", return_value=mock_resp), \
+         patch("backend.services.market._FINNHUB_TOKEN", "fake-token"):
+        with pytest.raises(ValueError, match="No upcoming earnings"):
+            get_next_earnings("AAPL")
