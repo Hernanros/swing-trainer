@@ -46,23 +46,25 @@ function EarningsCell({ symbol }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
     api.market.earnings(symbol)
-      .then(d => { setData(d); setLoading(false) })
-      .catch(() => setLoading(false))
+      .then(d  => { if (!cancelled) { setData(d); setLoading(false) } })
+      .catch(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
   }, [symbol])
 
   if (loading) return <span className="wl-price muted">…</span>
-  if (!data?.date) return <span className="wl-price muted" style={{ fontSize: 11 }}>—</span>
+  if (!data?.date) return <span className="wl-price muted wl-earnings">—</span>
 
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const erDate = new Date(data.date + 'T00:00:00')
   const daysUntil = Math.round((erDate - today) / 86400000)
 
-  if (daysUntil < 0)  return <span className="wl-price muted" style={{ fontSize: 11 }}>—</span>
-  if (daysUntil === 0) return <span className="wl-price red"  style={{ fontSize: 11 }}>ER today</span>
-  if (daysUntil === 1) return <span className="wl-price red"  style={{ fontSize: 11 }}>ER tomorrow</span>
-  return <span className="wl-price" style={{ color: 'var(--yellow)', fontSize: 11 }}>ER in {daysUntil}d</span>
+  if (daysUntil < 0)  return <span className="wl-price muted wl-earnings">—</span>
+  if (daysUntil === 0) return <span className="wl-price red wl-earnings">ER today</span>
+  if (daysUntil === 1) return <span className="wl-price red wl-earnings">ER tomorrow</span>
+  return <span className="wl-price wl-earnings" style={{ color: 'var(--yellow)' }}>ER in {daysUntil}d</span>
 }
 
 export default function Watchlist() {

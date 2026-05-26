@@ -103,12 +103,13 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 .wl-input-notes { flex: 1; }
 .wl-error { color: var(--red); font-size: 0.85em; }
 .wl-table { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: visible; }
-.wl-header { display: grid; grid-template-columns: 90px 180px 1fr 40px; padding: 10px 16px; font-size: 0.78em; color: var(--muted); border-bottom: 1px solid var(--border); border-radius: 10px 10px 0 0; }
-.wl-row { display: grid; grid-template-columns: 90px 180px 1fr 40px; padding: 12px 16px; align-items: center; border-bottom: 1px solid var(--border); }
+.wl-header { display: grid; grid-template-columns: 90px 180px 90px 1fr 40px; padding: 10px 16px; font-size: 0.78em; color: var(--muted); border-bottom: 1px solid var(--border); border-radius: 10px 10px 0 0; }
+.wl-row { display: grid; grid-template-columns: 90px 180px 90px 1fr 40px; padding: 12px 16px; align-items: center; border-bottom: 1px solid var(--border); }
 .wl-row:last-child { border-bottom: none; border-radius: 0 0 10px 10px; }
 .wl-row:hover { background: var(--surface2); }
 .wl-symbol { font-weight: 700; font-family: monospace; color: var(--accent); font-size: 0.95em; }
 .wl-price { font-family: monospace; font-size: 0.9em; }
+.wl-earnings { font-size: 11px; }
 .wl-change { font-size: 0.85em; }
 .wl-notes-text { font-size: 0.85em; color: var(--text2); cursor: pointer; }
 .wl-notes-text:hover { color: var(--accent); }
