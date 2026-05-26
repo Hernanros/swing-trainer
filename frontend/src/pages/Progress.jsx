@@ -55,14 +55,7 @@ export default function Progress() {
     setAnalyzing(true)
     setAnalyzeErr(null)
     api.progress.analyze()
-      .then(newPatterns => {
-        setPatternData(prev => ({
-          ...(prev || {}),
-          patterns:         newPatterns,
-          last_analyzed_at: new Date().toISOString(),
-          can_analyze:      false,
-        }))
-      })
+      .then(() => api.progress.patterns().then(setPatternData))
       .catch(() => setAnalyzeErr('Analysis failed — try again'))
       .finally(() => setAnalyzing(false))
   }
@@ -154,7 +147,7 @@ export default function Progress() {
           </div>
         )}
 
-        {patternData?.patterns.map((p, i) => {
+        {(patternData?.patterns ?? []).map((p, i) => {
           const color = p.severity === 'problem' ? 'var(--red)'
             : p.severity === 'watch' ? 'var(--yellow)'
             : 'var(--green)'

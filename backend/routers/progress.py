@@ -98,12 +98,12 @@ def analyze_patterns(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    closed_trades = db.query(Trade).filter(
+    closed_count = db.query(Trade).filter(
         Trade.user_id == current_user.id,
         Trade.status == "closed",
-    ).all()
+    ).count()
 
-    if len(closed_trades) < 5:
+    if closed_count < 5:
         raise HTTPException(422, "Need at least 5 closed trades to analyze patterns.")
 
     existing = db.query(AIPattern).filter(AIPattern.user_id == current_user.id).all()
@@ -125,6 +125,7 @@ def analyze_patterns(
         raise HTTPException(503, "Pattern analysis unavailable — try again later.")
 
     db.query(AIPattern).filter(AIPattern.user_id == current_user.id).delete(synchronize_session=False)
+    db.expire_all()
     now = datetime.now(timezone.utc)
     new_rows = []
     for p in parsed:

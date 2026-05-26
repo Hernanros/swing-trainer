@@ -197,7 +197,11 @@ def generate_pattern_analysis(context: str) -> list:
     )
     raw = message.content[0].text.strip()
     if raw.startswith("```"):
-        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        raw = raw.split("\n", 1)[-1]
+        if raw.endswith("```"):
+            raw = raw[:-3].strip()
+        else:
+            raw = raw.rsplit("```", 1)[0].strip()
     try:
         root = ET.fromstring(raw)
     except ET.ParseError as exc:
