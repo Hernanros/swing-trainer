@@ -54,14 +54,18 @@ export default function Home() {
   const greeting = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'
   const phase    = getPhase(now)
 
-  const [trades, setTrades]    = useState([])
-  const [skills, setSkills]    = useState([])
-  const [today, setToday]      = useState(null)
+  const [trades, setTrades]     = useState([])
+  const [skills, setSkills]     = useState([])
+  const [today, setToday]       = useState(null)
+  const [patterns, setPatterns] = useState([])
 
   useEffect(() => {
     api.trades.list().then(setTrades).catch(() => {})
     api.users.skills(user.id).then(setSkills).catch(() => {})
     api.train.today().then(setToday).catch(() => {})
+    api.progress.patterns()
+      .then(pd => setPatterns(pd.patterns || []))
+      .catch(() => {})
   }, [user.id])
 
   const openTrades = trades.filter(t => t.status === 'open')
@@ -95,6 +99,33 @@ export default function Home() {
       </div>
 
       <DailyTip />
+
+      {/* Coaching Insight */}
+      {(() => {
+        const top = patterns.find(p => p.severity === 'problem') || patterns.find(p => p.severity === 'watch')
+        if (!top) return null
+        const color = top.severity === 'problem' ? 'var(--red)' : 'var(--yellow)'
+        return (
+          <div style={{ background: 'var(--surface)', border: `1px solid ${color}`, borderRadius: 10, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{
+                background: color, color: '#000', borderRadius: 4,
+                padding: '2px 6px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+              }}>
+                {top.severity}
+              </span>
+              <span style={{ fontWeight: 700, color: 'var(--text)', fontSize: 13 }}>Coaching Insight</span>
+            </div>
+            <div style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 8 }}>{top.pattern_text}</div>
+            <div
+              style={{ color: 'var(--accent)', fontSize: 12, cursor: 'pointer' }}
+              onClick={() => navigate('/progress')}
+            >
+              See full analysis →
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Training Session Card */}
       <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
