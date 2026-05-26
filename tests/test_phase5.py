@@ -94,3 +94,42 @@ def test_analyze_excludes_practice_trades():
         _open_and_close(PRACTICE_TRADE)
     resp = client.post("/api/progress/analyze-patterns")
     assert resp.status_code == 422
+
+
+def test_quiz_submit_stores_detail_json():
+    detail = [
+        {"q_idx": 0, "chosen": 1, "answer": 2, "is_correct": False},
+        {"q_idx": 1, "chosen": 0, "answer": 0, "is_correct": True},
+    ]
+    resp = client.post("/api/train/quiz/submit", json={
+        "skill": "chart_reading",
+        "drill_type": "quiz",
+        "score": 50.0,
+        "detail": detail,
+    })
+    assert resp.status_code == 200
+
+    db = _Session()
+    from backend.models import DrillResult
+    row = db.query(DrillResult).first()
+    db.close()
+    assert row is not None
+    assert row.detail_json is not None
+    stored = json.loads(row.detail_json)
+    assert stored == detail
+
+
+def test_quiz_submit_without_detail():
+    resp = client.post("/api/train/quiz/submit", json={
+        "skill": "chart_reading",
+        "drill_type": "quiz",
+        "score": 80.0,
+    })
+    assert resp.status_code == 200
+
+    db = _Session()
+    from backend.models import DrillResult
+    row = db.query(DrillResult).first()
+    db.close()
+    assert row is not None
+    assert row.detail_json is None

@@ -20,6 +20,7 @@ class QuizSubmit(_BaseModel):
     skill: str
     drill_type: str
     score: float   # 0 or 100
+    detail: list = []
 
 
 class AIDrillRequest(_BaseModel):
@@ -151,6 +152,7 @@ def submit_quiz(
         skill=body.skill,
         score=body.score,
         date=today,
+        detail_json=json.dumps(body.detail) if body.detail else None,
     ))
     db.commit()
     _update_skill_score(current_user.id, body.skill, db)
