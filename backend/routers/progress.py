@@ -1,9 +1,13 @@
-from fastapi import APIRouter, Depends
+import logging
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.auth import get_current_user
-from backend.models import Trade, User
+from backend.models import Trade, User, AIPattern
+from backend.services.claude import get_user_coaching_context, generate_pattern_analysis
 
+_log = logging.getLogger(__name__)
 router = APIRouter(prefix="/progress", tags=["progress"])
 
 
@@ -35,3 +39,109 @@ def get_stats(
         "avg_plan_adherence": avg_plan_adherence,
         "total_pnl":          total_pnl,
     }
+
+
+@router.get("/patterns")
+def get_patterns(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    patterns = (
+        db.query(AIPattern)
+        .filter(AIPattern.user_id == current_user.id)
+        .order_by(AIPattern.detected_at.desc())
+        .all()
+    )
+
+    closed_count = db.query(Trade).filter(
+        Trade.user_id == current_user.id,
+        Trade.status == "closed",
+    ).count()
+
+    min_trades_met = closed_count >= 5
+    last_analyzed_at = None
+    can_analyze = min_trades_met
+
+    if patterns:
+        last_analyzed_at = max(p.detected_at for p in patterns)
+        new_trade_count = db.query(Trade).filter(
+            Trade.user_id == current_user.id,
+            Trade.status == "closed",
+            Trade.created_at > last_analyzed_at,
+        ).count()
+        can_analyze = min_trades_met and new_trade_count >= 1
+
+    return {
+        "patterns": [
+            {
+                "id": p.id,
+                "pattern_text": p.pattern_text,
+                "severity": p.severity,
+                "detected_at": p.detected_at.isoformat(),
+            }
+            for p in patterns
+        ],
+        "last_analyzed_at": last_analyzed_at.isoformat() if last_analyzed_at else None,
+        "min_trades_met":   min_trades_met,
+        "can_analyze":      can_analyze,
+        "trade_range":      "last 20 trades",
+    }
+
+
+@router.post("/analyze-patterns")
+def analyze_patterns(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    closed_trades = db.query(Trade).filter(
+        Trade.user_id == current_user.id,
+        Trade.status == "closed",
+    ).all()
+
+    if len(closed_trades) < 5:
+        raise HTTPException(422, "Need at least 5 closed trades to analyze patterns.")
+
+    existing = db.query(AIPattern).filter(AIPattern.user_id == current_user.id).all()
+    if existing:
+        last_analyzed_at = max(p.detected_at for p in existing)
+        new_count = db.query(Trade).filter(
+            Trade.user_id == current_user.id,
+            Trade.status == "closed",
+            Trade.created_at > last_analyzed_at,
+        ).count()
+        if new_count == 0:
+            raise HTTPException(429, "No new trades since last analysis.")
+
+    context = get_user_coaching_context(current_user, db)
+    try:
+        parsed = generate_pattern_analysis(context)
+    except Exception:
+        _log.exception("Pattern analysis failed for user %s", current_user.id)
+        raise HTTPException(503, "Pattern analysis unavailable — try again later.")
+
+    db.query(AIPattern).filter(AIPattern.user_id == current_user.id).delete()
+    now = datetime.now(timezone.utc)
+    new_rows = []
+    for p in parsed:
+        row = AIPattern(
+            user_id=current_user.id,
+            pattern_text=p["pattern_text"],
+            severity=p["severity"],
+            detected_at=now,
+            trade_range="last 20 trades",
+        )
+        db.add(row)
+        new_rows.append(row)
+    db.commit()
+    for row in new_rows:
+        db.refresh(row)
+
+    return [
+        {
+            "id": row.id,
+            "pattern_text": row.pattern_text,
+            "severity": row.severity,
+            "detected_at": row.detected_at.isoformat(),
+        }
+        for row in new_rows
+    ]
