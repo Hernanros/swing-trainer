@@ -52,25 +52,17 @@ export default function Journal() {
   useEffect(() => { loadTrades() }, [loadTrades])
 
   async function handleOpen(body) {
-    try {
-      await api.trades.open(body)
-      await loadTrades()
-    } catch (e) {
-      setError(e.message)
-    }
+    await api.trades.open(body)
+    await loadTrades()
   }
 
   async function handleClose(body) {
-    try {
-      const result = await api.trades.close(drawer.trade.id, body)
-      await loadTrades()
-      const count = result?.closed_count
-      if (count && count >= 5 && count % 5 === 0) {
-        sessionStorage.setItem('analysis_available', '1')
-        window.dispatchEvent(new Event('analysis-badge'))
-      }
-    } catch (e) {
-      setError(e.message)
+    const result = await api.trades.close(drawer.trade.id, body)
+    await loadTrades()
+    const count = result?.closed_count
+    if (count && count >= 5 && count % 5 === 0) {
+      sessionStorage.setItem('analysis_available', '1')
+      window.dispatchEvent(new Event('analysis-badge'))
     }
   }
 
