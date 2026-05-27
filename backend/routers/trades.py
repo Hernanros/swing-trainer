@@ -19,7 +19,7 @@ def _generate_debrief_bg(trade_id: int, rule_detail: Optional[dict] = None) -> N
         trade = db.query(Trade).filter(Trade.id == trade_id).first()
         if not trade or trade.status != "closed" or trade.ai_debrief:
             return
-        trade.ai_debrief = claude_service.generate_trade_debrief(trade)
+        trade.ai_debrief = claude_service.generate_trade_debrief(trade, rule_detail)
         db.commit()
     except Exception:
         db.rollback()

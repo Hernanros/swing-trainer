@@ -1,5 +1,6 @@
 import os
 import xml.etree.ElementTree as ET
+from typing import Optional
 
 _api_key = os.getenv("ANTHROPIC_API_KEY")
 
@@ -61,11 +62,15 @@ def call_claude(prompt: str, max_tokens: int = 1000) -> str:
     return message.content[0].text
 
 
-def generate_trade_debrief(trade) -> str:
+def generate_trade_debrief(trade, rule_detail: Optional[dict] = None) -> str:
     if not _api_key:
         return "[AI debrief unavailable — set ANTHROPIC_API_KEY to enable]"
     from anthropic import Anthropic
     client = Anthropic(api_key=_api_key)
+
+    followed_str = ", ".join(rule_detail["followed"]) if rule_detail and rule_detail.get("followed") else "none recorded"
+    violated_str = ", ".join(rule_detail["violated"]) if rule_detail and rule_detail.get("violated") else "none recorded"
+
     prompt = f"""You are a professional swing trading coach. Analyze this trade and write a concise debrief.
 
 Trade:
@@ -74,6 +79,8 @@ Trade:
 - Shares: {trade.shares} | P&L: ${trade.pnl:.2f} ({trade.r_multiple:.2f}R)
 - Setup type: {trade.setup_type or 'Not specified'}
 - Plan adherence score: {f"{trade.checklist_score:.0f}%" if trade.checklist_score is not None else "N/A"}
+- Rules followed: {followed_str}
+- Rules violated: {violated_str}
 - Pre-trade note: {trade.pre_note or 'None'}
 
 Write exactly 4 short paragraphs:
