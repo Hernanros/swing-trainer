@@ -249,7 +249,7 @@ def test_close_trade_schedules_background_debrief(user_id):
             "exit_price": 930.0,
             "debrief": "Held to target.",
         })
-    mock_bg.assert_called_once_with(trade_id)
+    mock_bg.assert_called_once_with(trade_id, None)
 
 
 def test_generate_debrief_bg_writes_ai_debrief(user_id):

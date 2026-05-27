@@ -1,10 +1,11 @@
 import logging
 from datetime import datetime, timezone
+from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.database import get_db, SessionLocal
 from backend.auth import get_current_user
-from backend.models import Trade, User
+from backend.models import Trade, User, ChecklistLog, PlaybookRule
 from backend.schemas import TradeCreate, TradeClose, TradeResponse
 from backend.services import claude as claude_service
 
@@ -12,7 +13,7 @@ router = APIRouter(prefix="/trades", tags=["trades"])
 logger = logging.getLogger(__name__)
 
 
-def _generate_debrief_bg(trade_id: int) -> None:
+def _generate_debrief_bg(trade_id: int, rule_detail: Optional[dict] = None) -> None:
     db = SessionLocal()
     try:
         trade = db.query(Trade).filter(Trade.id == trade_id).first()
@@ -139,10 +140,44 @@ def close_trade(
     trade.pnl = round(pnl, 2)
     trade.r_multiple = round(r_multiple, 4)
     trade.status = "closed"
+
+    rule_detail = None
+    if body.checklist_items:
+        rule_ids = [item["rule_id"] for item in body.checklist_items]
+        rule_map = {
+            r.id: r.text
+            for r in db.query(PlaybookRule).filter(PlaybookRule.id.in_(rule_ids)).all()
+        }
+        for item in body.checklist_items:
+            db.add(ChecklistLog(
+                user_id=trade.user_id,
+                trade_id=trade.id,
+                rule_id=item["rule_id"],
+                checked=item["checked"],
+                tier=item["tier"],
+            ))
+        scoreable = [i for i in body.checklist_items if i["tier"] in ("must", "should")]
+        if scoreable:
+            checked_count = sum(1 for i in scoreable if i["checked"])
+            trade.checklist_score = round(checked_count / len(scoreable) * 100, 1)
+        followed = [rule_map[i["rule_id"]] for i in body.checklist_items if i["checked"] and i["rule_id"] in rule_map]
+        violated = [rule_map[i["rule_id"]] for i in body.checklist_items if not i["checked"] and i["rule_id"] in rule_map]
+        rule_detail = {"followed": followed, "violated": violated}
+
     db.commit()
     db.refresh(trade)
-    background_tasks.add_task(_generate_debrief_bg, trade_id)
-    return _to_response(trade)
+
+    closed_count = db.query(Trade).filter(
+        Trade.user_id == trade.user_id,
+        Trade.status == "closed",
+        Trade.practice == False,
+    ).count()
+
+    background_tasks.add_task(_generate_debrief_bg, trade.id, rule_detail)
+
+    response = _to_response(trade)
+    response["closed_count"] = closed_count
+    return response
 
 
 @router.post("/{trade_id}/ai-debrief", response_model=TradeResponse)

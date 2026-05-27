@@ -67,6 +67,7 @@ class TradeCreate(BaseModel):
 class TradeClose(BaseModel):
     exit_price: float
     debrief: str
+    checklist_items: list[dict] = []
 
     model_config = {"str_strip_whitespace": True}
 
@@ -93,6 +94,7 @@ class TradeResponse(BaseModel):
     ai_debrief: Optional[str]
     created_at: datetime
     trade_date: Optional[str] = None
+    closed_count: Optional[int] = None
 
 
 VALID_TIERS = {"must", "should", "context"}
