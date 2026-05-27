@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, Fragment } from 'react'
+import { useLocation } from 'react-router-dom'
 import { api } from '../api'
 import TradeDrawer from '../components/TradeDrawer'
 import TradeChart from '../components/TradeChart'
@@ -27,6 +28,15 @@ export default function Journal() {
   const [drawer, setDrawer]   = useState(null) // null | { mode:'open' } | { mode:'close', trade }
   const [expandedId, setExpandedId] = useState(null)
 
+  const location = useLocation()
+
+  useEffect(() => {
+    if (location.state?.prefill) {
+      setDrawer({ mode: 'open', prefill: location.state.prefill })
+      window.history.replaceState({}, '')
+    }
+  }, [])
+
   const loadTrades = useCallback(async () => {
     try {
       const data = await api.trades.list()
@@ -46,8 +56,13 @@ export default function Journal() {
   }
 
   async function handleClose(body) {
-    await api.trades.close(drawer.trade.id, body)
+    const result = await api.trades.close(drawer.trade.id, body)
     await loadTrades()
+    const count = result?.closed_count
+    if (count && count >= 5 && count % 5 === 0) {
+      sessionStorage.setItem('analysis_available', '1')
+      window.dispatchEvent(new Event('analysis-badge'))
+    }
   }
 
   return (
@@ -95,7 +110,7 @@ export default function Journal() {
                     }}
                   >
                     <td style={{ padding: '9px 10px', color: 'var(--muted)' }}>
-                      {new Date(t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      {new Date(t.trade_date || t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </td>
                     <td style={{ padding: '9px 10px', fontWeight: 600, color: 'var(--text)' }}>{t.symbol}</td>
                     <td style={{ padding: '9px 10px', color: t.direction === 'long' ? 'var(--green)' : 'var(--red)', textTransform: 'uppercase', fontSize: 11, fontWeight: 600 }}>
@@ -175,6 +190,7 @@ export default function Journal() {
         <TradeDrawer
           mode={drawer.mode}
           trade={drawer.trade}
+          prefill={drawer.prefill}
           onSubmit={drawer.mode === 'open' ? handleOpen : handleClose}
           onClose={() => setDrawer(null)}
         />
