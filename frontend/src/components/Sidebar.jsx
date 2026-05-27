@@ -1,5 +1,5 @@
-import React from 'react'
-import { NavLink } from 'react-router-dom'
+import React, { useState, useEffect } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 
 const NAV = [
@@ -15,6 +15,23 @@ const NAV = [
 
 export default function Sidebar() {
   const { user, users, switchUser } = useUser()
+  const location = useLocation()
+  const [analysisBadge, setAnalysisBadge] = useState(
+    () => sessionStorage.getItem('analysis_available') === '1'
+  )
+
+  useEffect(() => {
+    function onBadge() { setAnalysisBadge(true) }
+    window.addEventListener('analysis-badge', onBadge)
+    return () => window.removeEventListener('analysis-badge', onBadge)
+  }, [])
+
+  useEffect(() => {
+    if (location.pathname === '/progress') {
+      sessionStorage.removeItem('analysis_available')
+      setAnalysisBadge(false)
+    }
+  }, [location.pathname])
 
   return (
     <nav className="sidebar">
@@ -32,6 +49,13 @@ export default function Sidebar() {
         >
           <span className="nav-icon">{item.icon}</span>
           {item.label}
+          {item.to === '/progress' && analysisBadge && (
+            <span style={{
+              display: 'inline-block', width: 7, height: 7,
+              borderRadius: '50%', background: 'var(--red)',
+              marginLeft: 6, verticalAlign: 'middle',
+            }} />
+          )}
         </NavLink>
       ))}
 
