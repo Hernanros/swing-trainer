@@ -50,6 +50,48 @@ async def lifespan(app: FastAPI):
         if "tags" not in wl_cols:
             conn.execute(text("ALTER TABLE watchlist ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'"))
             conn.commit()
+        # Make trades.setup_type nullable (was accidentally created NOT NULL)
+        setup_col = {row[1]: row[3] for row in conn.execute(text("PRAGMA table_info(trades)"))}
+        if setup_col.get("setup_type") == 1:  # notnull == 1 means NOT NULL
+            conn.execute(text("""
+                CREATE TABLE trades_migrated AS SELECT * FROM trades;
+            """))
+            conn.execute(text("DROP TABLE trades"))
+            conn.execute(text("""
+                CREATE TABLE trades (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    symbol VARCHAR NOT NULL,
+                    date VARCHAR NOT NULL,
+                    direction VARCHAR NOT NULL,
+                    setup_type VARCHAR,
+                    entry FLOAT NOT NULL,
+                    stop FLOAT NOT NULL,
+                    target FLOAT NOT NULL,
+                    exit FLOAT,
+                    shares INTEGER NOT NULL,
+                    status VARCHAR,
+                    practice BOOLEAN,
+                    pre_note TEXT,
+                    debrief TEXT,
+                    checklist_score FLOAT,
+                    pnl FLOAT,
+                    r_multiple FLOAT,
+                    ai_debrief TEXT,
+                    trade_date TEXT,
+                    created_at DATETIME
+                )
+            """))
+            conn.execute(text("""
+                INSERT INTO trades SELECT
+                    id, user_id, symbol, date, direction, setup_type, entry, stop, target,
+                    exit, shares, status, practice, pre_note, debrief, checklist_score, pnl,
+                    r_multiple, ai_debrief, trade_date, created_at
+                FROM trades_migrated
+            """))
+            conn.execute(text("DROP TABLE trades_migrated"))
+            conn.commit()
+            _log.info("Migrated trades.setup_type to nullable")
     yield
 
 
