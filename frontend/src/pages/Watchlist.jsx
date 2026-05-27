@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import ChartModal from '../components/ChartModal'
 
@@ -68,6 +69,7 @@ function EarningsCell({ symbol }) {
 }
 
 export default function Watchlist() {
+  const navigate = useNavigate()
   const [items, setItems] = useState([])
   const [symbol, setSymbol] = useState('')
   const [notes, setNotes] = useState('')
@@ -174,6 +176,7 @@ export default function Watchlist() {
             <span>Price / Change</span>
             <span>Earnings</span>
             <span>Notes</span>
+            <span>Action</span>
             <span />
           </div>
           {items.map(item => (
@@ -206,6 +209,15 @@ export default function Watchlist() {
                     {item.notes || <em className="muted">add notes</em>}
                   </span>
                 )}
+              </span>
+              <span>
+                <button
+                  className="btn-sm btn-ghost"
+                  style={{ fontSize: 11 }}
+                  onClick={() => navigate('/journal', { state: { prefill: { symbol: item.symbol } } })}
+                >
+                  Trade →
+                </button>
               </span>
               <span className="wl-actions">
                 <button className="btn-sm btn-ghost btn-danger" onClick={() => remove(item.id)}>✕</button>
