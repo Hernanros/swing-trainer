@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, Fragment } from 'react'
 import { api } from '../api'
 import TradeDrawer from '../components/TradeDrawer'
 import TradeChart from '../components/TradeChart'
@@ -85,8 +85,8 @@ export default function Journal() {
               {trades.map(t => {
                 const badge = statusBadge(t)
                 return (
+                  <Fragment key={t.id}>
                   <tr
-                    key={t.id}
                     onClick={t.status === 'closed' ? () => setExpandedId(expandedId === t.id ? null : t.id) : undefined}
                     style={{
                       borderBottom: '1px solid var(--border)',
@@ -163,6 +163,7 @@ export default function Journal() {
                       </td>
                     </tr>
                   )}
+                  </Fragment>
                 )
               })}
             </tbody>
