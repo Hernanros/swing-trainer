@@ -80,7 +80,7 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
     return Math.round((checkedCount / scoreable.length) * 100)
   }
 
-  const mustUnchecked = rules.filter(r => r.tier === 'must' && !checked[r.id])
+  const mustUnchecked = mode === 'open' ? rules.filter(r => r.tier === 'must' && !checked[r.id]) : []
 
   function validate() {
     const errs = {}
@@ -155,6 +155,8 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
   )
 
   const submitDisabled = saving || (mode === 'open' && mustUnchecked.length > 0)
+
+  const checklistScore = computeChecklistScore()
 
   return (
     <>
@@ -250,9 +252,9 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
                     </div>
                   )
                 })}
-                {computeChecklistScore() !== null && (
+                {checklistScore !== null && (
                   <div style={{ fontSize: 11, color: 'var(--muted)', borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 4 }}>
-                    Score: <strong style={{ color: 'var(--text)' }}>{computeChecklistScore()}%</strong>
+                    Score: <strong style={{ color: 'var(--text)' }}>{checklistScore}%</strong>
                   </div>
                 )}
               </div>
@@ -354,9 +356,9 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
                     </div>
                   )
                 })}
-                {computeChecklistScore() !== null && (
+                {checklistScore !== null && (
                   <div style={{ fontSize: 11, color: 'var(--muted)', borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 4 }}>
-                    Score: <strong style={{ color: 'var(--text)' }}>{computeChecklistScore()}%</strong>
+                    Score: <strong style={{ color: 'var(--text)' }}>{checklistScore}%</strong>
                   </div>
                 )}
               </div>
