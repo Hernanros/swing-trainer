@@ -46,6 +46,9 @@ async def lifespan(app: FastAPI):
         if "ai_debrief" not in trade_cols:
             conn.execute(text("ALTER TABLE trades ADD COLUMN ai_debrief TEXT"))
             conn.commit()
+        if "trade_date" not in trade_cols:
+            conn.execute(text("ALTER TABLE trades ADD COLUMN trade_date TEXT"))
+            conn.commit()
         wl_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(watchlist)"))]
         if "tags" not in wl_cols:
             conn.execute(text("ALTER TABLE watchlist ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'"))
