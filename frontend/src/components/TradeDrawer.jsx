@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api'
 
 const TIER_COLORS = { must: 'var(--red)', should: 'var(--yellow)', context: 'var(--accent)' }
 const TIER_LABELS = { must: 'Must-Have', should: 'Should-Have', context: 'Context Note' }
 
-export default function TradeDrawer({ mode, trade, onSubmit, onClose }) {
+export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill }) {
   const [form, setForm] = useState({
     symbol:       '',
     direction:    'long',
@@ -24,6 +25,7 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose }) {
   const [setups, setSetups]   = useState([])
   const [rules, setRules]     = useState([])
   const [checked, setChecked] = useState({})
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (mode !== 'open') return
@@ -39,11 +41,28 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose }) {
   }, [form.setup_type, mode])
 
   useEffect(() => {
+    if (mode !== 'close') return
+    if (!trade?.setup_type) { setRules([]); setChecked({}); return }
+    api.playbook.rules(trade.setup_type)
+      .then(r => {
+        setRules(r)
+        setChecked(Object.fromEntries(r.map(rule => [rule.id, false])))
+      })
+      .catch(() => {})
+  }, [mode, trade])
+
+  useEffect(() => {
     if (mode === 'close' && trade) {
       setForm(f => ({ ...f, exit_price: '', debrief: '' }))
     }
     setErrors({})
   }, [mode, trade])
+
+  useEffect(() => {
+    if (mode === 'open' && prefill?.symbol) {
+      setForm(f => ({ ...f, symbol: prefill.symbol }))
+    }
+  }, [mode, prefill])
 
   function set(key, val) {
     setForm(f => ({ ...f, [key]: val }))
@@ -101,8 +120,11 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose }) {
             trade_date:      form.trade_date || null,
           }
         : {
-            exit_price: +form.exit_price,
-            debrief:    form.debrief.trim(),
+            exit_price:      +form.exit_price,
+            debrief:         form.debrief.trim(),
+            checklist_items: rules
+              .filter(r => r.tier !== 'context')
+              .map(r => ({ rule_id: r.id, checked: !!checked[r.id], tier: r.tier })),
           }
       await onSubmit(data)
       onClose()
@@ -286,6 +308,60 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose }) {
               <div>{trade?.direction?.toUpperCase()} · Entry ${trade?.entry_price} · {trade?.shares} shares</div>
               <div>Stop ${trade?.stop_price} · Target ${trade?.target_price}</div>
             </div>
+
+            {!trade?.setup_type ? (
+              <div style={{ fontSize: 12, color: 'var(--dim)' }}>
+                No setup type on this trade.{' '}
+                <span style={{ color: 'var(--accent)', cursor: 'pointer' }} onClick={() => navigate('/playbook')}>
+                  Build your playbook →
+                </span>
+              </div>
+            ) : rules.length === 0 ? (
+              <div style={{ fontSize: 12, color: 'var(--dim)' }}>
+                No playbook rules for "{trade.setup_type}" yet.{' '}
+                <span style={{ color: 'var(--accent)', cursor: 'pointer' }} onClick={() => navigate('/playbook')}>
+                  Add rules →
+                </span>
+              </div>
+            ) : (
+              <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>
+                  Playbook Checklist — {trade.setup_type}
+                </div>
+                {['must', 'should', 'context'].map(tier => {
+                  const tierRules = rules.filter(r => r.tier === tier)
+                  if (tierRules.length === 0) return null
+                  return (
+                    <div key={tier}>
+                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: TIER_COLORS[tier], marginBottom: 4, letterSpacing: '0.06em' }}>
+                        {TIER_LABELS[tier]}
+                      </div>
+                      {tierRules.map(rule => (
+                        <label key={rule.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginBottom: 4 }}>
+                          {tier !== 'context' ? (
+                            <input
+                              type="checkbox"
+                              checked={!!checked[rule.id]}
+                              onChange={() => toggleRule(rule.id)}
+                              style={{ marginTop: 2, flexShrink: 0 }}
+                            />
+                          ) : (
+                            <span style={{ width: 14, height: 14, flexShrink: 0 }} />
+                          )}
+                          <span style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.4 }}>{rule.text}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )
+                })}
+                {computeChecklistScore() !== null && (
+                  <div style={{ fontSize: 11, color: 'var(--muted)', borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 4 }}>
+                    Score: <strong style={{ color: 'var(--text)' }}>{computeChecklistScore()}%</strong>
+                  </div>
+                )}
+              </div>
+            )}
+
             {field('exit_price', 'Exit Price', 'number', '930.00')}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label style={{ fontSize: 11, color: 'var(--muted)' }}>
