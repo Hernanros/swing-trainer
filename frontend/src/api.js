@@ -47,6 +47,7 @@ export const api = {
     stats:    () => request('GET', '/progress/stats'),
     patterns: () => request('GET', '/progress/patterns'),
     analyze:  () => request('POST', '/progress/analyze-patterns'),
+    setups:   () => request('GET', '/progress/setups'),
   },
   watchlist: {
     list:        ()         => request('GET',    '/watchlist/'),

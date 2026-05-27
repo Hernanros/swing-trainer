@@ -27,6 +27,7 @@ export default function Progress() {
   const [stats, setStats]             = useState(null)
   const [skills, setSkills]           = useState([])
   const [patternData, setPatternData] = useState(null)
+  const [setups, setSetups]           = useState([])
   const [analyzing, setAnalyzing]     = useState(false)
   const [analyzeErr, setAnalyzeErr]   = useState(null)
   const [loading, setLoading]         = useState(true)
@@ -36,10 +37,12 @@ export default function Progress() {
       api.progress.stats(),
       api.users.skills(user.id),
       api.progress.patterns(),
-    ]).then(([s, sk, pd]) => {
+      api.progress.setups(),
+    ]).then(([s, sk, pd, su]) => {
       setStats(s)
       setSkills(sk)
       setPatternData(pd)
+      setSetups(su)
     }).catch(err => { console.error('Progress load failed:', err) }).finally(() => setLoading(false))
   }, [user.id])
 
@@ -177,6 +180,36 @@ export default function Progress() {
           </div>
         )}
       </div>
+
+      {setups.length > 0 && (
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
+          <div style={{ fontWeight: 700, color: 'var(--text)', fontSize: 14, marginBottom: 12 }}>By Setup</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ color: 'var(--muted)', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
+                <th style={{ padding: '4px 8px', fontWeight: 500 }}>Setup</th>
+                <th style={{ padding: '4px 8px', fontWeight: 500 }}>Trades</th>
+                <th style={{ padding: '4px 8px', fontWeight: 500 }}>Win %</th>
+                <th style={{ padding: '4px 8px', fontWeight: 500 }}>Avg R</th>
+              </tr>
+            </thead>
+            <tbody>
+              {setups.map(s => (
+                <tr key={s.setup_type} style={{ borderBottom: '1px solid var(--border)' }}>
+                  <td style={{ padding: '6px 8px', color: 'var(--text)' }}>{s.setup_type}</td>
+                  <td style={{ padding: '6px 8px', color: 'var(--text2)', fontFamily: 'monospace' }}>{s.trades}</td>
+                  <td style={{ padding: '6px 8px', fontFamily: 'monospace', color: s.win_rate >= 50 ? 'var(--green)' : 'var(--red)' }}>
+                    {s.win_rate}%
+                  </td>
+                  <td style={{ padding: '6px 8px', fontFamily: 'monospace', color: s.avg_r == null ? 'var(--muted)' : s.avg_r >= 1 ? 'var(--green)' : s.avg_r >= 0 ? 'var(--yellow)' : 'var(--red)' }}>
+                    {s.avg_r != null ? `${s.avg_r >= 0 ? '+' : ''}${s.avg_r}R` : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {stats && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
