@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, Fragment } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import TradeDrawer from '../components/TradeDrawer'
 import TradeChart from '../components/TradeChart'
@@ -29,11 +29,12 @@ export default function Journal() {
   const [expandedId, setExpandedId] = useState(null)
 
   const location = useLocation()
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (location.state?.prefill) {
       setDrawer({ mode: 'open', prefill: location.state.prefill })
-      window.history.replaceState({}, '')
+      navigate(location.pathname, { replace: true, state: {} })
     }
   }, [])
 
@@ -51,17 +52,25 @@ export default function Journal() {
   useEffect(() => { loadTrades() }, [loadTrades])
 
   async function handleOpen(body) {
-    await api.trades.open(body)
-    await loadTrades()
+    try {
+      await api.trades.open(body)
+      await loadTrades()
+    } catch (e) {
+      setError(e.message)
+    }
   }
 
   async function handleClose(body) {
-    const result = await api.trades.close(drawer.trade.id, body)
-    await loadTrades()
-    const count = result?.closed_count
-    if (count && count >= 5 && count % 5 === 0) {
-      sessionStorage.setItem('analysis_available', '1')
-      window.dispatchEvent(new Event('analysis-badge'))
+    try {
+      const result = await api.trades.close(drawer.trade.id, body)
+      await loadTrades()
+      const count = result?.closed_count
+      if (count && count >= 5 && count % 5 === 0) {
+        sessionStorage.setItem('analysis_available', '1')
+        window.dispatchEvent(new Event('analysis-badge'))
+      }
+    } catch (e) {
+      setError(e.message)
     }
   }
 
