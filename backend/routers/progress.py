@@ -158,3 +158,35 @@ def analyze_patterns(
         }
         for row in new_rows
     ]
+
+
+@router.get("/setups")
+def get_setup_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from collections import defaultdict
+    trades = db.query(Trade).filter(
+        Trade.user_id == current_user.id,
+        Trade.status == "closed",
+        Trade.practice == False,
+        Trade.setup_type != None,
+        Trade.setup_type != "",
+    ).all()
+
+    groups = defaultdict(list)
+    for t in trades:
+        groups[t.setup_type].append(t)
+
+    result = []
+    for setup, ts in sorted(groups.items()):
+        wins = [t for t in ts if t.pnl is not None and t.pnl >= 0]
+        r_vals = [t.r_multiple for t in ts if t.r_multiple is not None]
+        result.append({
+            "setup_type": setup,
+            "trades":     len(ts),
+            "wins":       len(wins),
+            "win_rate":   round(len(wins) / len(ts) * 100, 1),
+            "avg_r":      round(sum(r_vals) / len(r_vals), 2) if r_vals else None,
+        })
+    return result

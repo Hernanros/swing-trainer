@@ -108,3 +108,43 @@ def test_close_trade_no_checklist_leaves_score_null():
     trade = _open_trade()
     result = _close_trade(trade["id"])  # no checklist_items key
     assert result["checklist_score"] is None
+
+
+def test_setup_stats_groups_by_setup_type():
+    t1 = client.post("/api/trades/", json={**OPEN_TRADE, "setup_type": "breakout"}).json()
+    client.put(f"/api/trades/{t1['id']}/close", json={"exit_price": 110.0, "debrief": "win"})
+    t2 = client.post("/api/trades/", json={**OPEN_TRADE, "setup_type": "breakout"}).json()
+    client.put(f"/api/trades/{t2['id']}/close", json={"exit_price": 90.0, "debrief": "loss"})
+    t3 = client.post("/api/trades/", json={**OPEN_TRADE, "setup_type": "pullback"}).json()
+    client.put(f"/api/trades/{t3['id']}/close", json={"exit_price": 110.0, "debrief": "win"})
+
+    r = client.get("/api/progress/setups")
+    assert r.status_code == 200
+    data = {s["setup_type"]: s for s in r.json()}
+    assert data["breakout"]["trades"] == 2
+    assert data["breakout"]["wins"] == 1
+    assert data["breakout"]["win_rate"] == 50.0
+    assert data["pullback"]["trades"] == 1
+    assert data["pullback"]["wins"] == 1
+    assert data["pullback"]["win_rate"] == 100.0
+
+
+def test_setup_stats_excludes_practice():
+    t1 = client.post("/api/trades/", json={**OPEN_TRADE, "setup_type": "breakout"}).json()
+    client.put(f"/api/trades/{t1['id']}/close", json={"exit_price": 110.0, "debrief": "x"})
+    t2 = client.post("/api/trades/", json={**OPEN_TRADE, "setup_type": "breakout", "practice": True}).json()
+    client.put(f"/api/trades/{t2['id']}/close", json={"exit_price": 110.0, "debrief": "x"})
+
+    r = client.get("/api/progress/setups")
+    data = {s["setup_type"]: s for s in r.json()}
+    assert data["breakout"]["trades"] == 1
+
+
+def test_setup_stats_excludes_null_setup_type():
+    trade_no_setup = {k: v for k, v in OPEN_TRADE.items() if k != "setup_type"}
+    t = client.post("/api/trades/", json=trade_no_setup).json()
+    client.put(f"/api/trades/{t['id']}/close", json={"exit_price": 110.0, "debrief": "x"})
+
+    r = client.get("/api/progress/setups")
+    assert r.status_code == 200
+    assert r.json() == []
