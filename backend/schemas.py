@@ -12,6 +12,17 @@ VALID_SKILLS = [
     "emotional_discipline",
 ]
 
+VALID_DRILL_KEYS = [
+    "setup_selection",
+    "entry_timing",
+    "trade_management",
+    "emotional_discipline",
+    "chart_reading",
+    "chart_patterns",
+    "support_resistance",
+    "channels",
+]
+
 VALID_STAGES = ["learning", "small_money", "active"]
 VALID_TIME_BUDGETS = ["15min", "30min", "60min"]
 

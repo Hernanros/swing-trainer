@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from backend.main import app
 from backend.database import Base, get_db
+from backend.models import User, SkillScore, QuestionMastery
 import json
 
 TEST_DB_URL = "sqlite://"
@@ -20,7 +21,6 @@ def reset_db():
     saved = app.dependency_overrides.get(get_db)
     app.dependency_overrides[get_db] = lambda: _Session()
     Base.metadata.create_all(bind=_engine)
-    from backend.models import User, SkillScore
     db = _Session()
     user = User(
         name="T",
@@ -128,3 +128,16 @@ def test_today_counts_completed_drills():
     resp = client.get("/api/train/today")
     assert resp.json()["drills_completed"] == 1
     assert resp.json()["remaining"] == 1
+
+
+def test_question_mastery_model_defaults():
+    db = _Session()
+    row = QuestionMastery(user_id=1, drill_key='entry_timing', bank_idx=3)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    assert row.state == 'new'
+    assert row.correct_streak == 0
+    assert row.drill_key == 'entry_timing'
+    assert row.bank_idx == 3
+    db.close()

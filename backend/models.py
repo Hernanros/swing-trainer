@@ -1,7 +1,8 @@
 import json
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey
+    Column, Integer, String, Float, Boolean, DateTime, Text, ForeignKey,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from backend.database import Base
@@ -25,6 +26,7 @@ class User(Base):
     module_progress = relationship("ModuleProgress", back_populates="user", cascade="all, delete-orphan")
     ai_patterns = relationship("AIPattern", back_populates="user", cascade="all, delete-orphan")
     tips = relationship("Tip", back_populates="user", cascade="all, delete-orphan")
+    question_mastery = relationship("QuestionMastery", back_populates="user", cascade="all, delete-orphan")
 
     @property
     def active_skills_list(self):
@@ -173,3 +175,19 @@ class CachedContent(Base):
     key = Column(String, unique=True, nullable=False)  # e.g. module:breakout-entry:theory:level2
     content = Column(Text, nullable=False)
     generated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class QuestionMastery(Base):
+    __tablename__ = "question_mastery"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    drill_key = Column(String, nullable=False)
+    bank_idx = Column(Integer, nullable=False)
+    state = Column(String, default='new')         # new | learning | mastered
+    correct_streak = Column(Integer, default=0)
+    updated_at = Column(DateTime, default=lambda: datetime.now(timezone.utc),
+                        onupdate=lambda: datetime.now(timezone.utc))
+
+    user = relationship("User", back_populates="question_mastery")
+
+    __table_args__ = (UniqueConstraint('user_id', 'drill_key', 'bank_idx'),)
