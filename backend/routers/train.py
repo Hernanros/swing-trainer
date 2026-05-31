@@ -7,9 +7,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.auth import get_current_user
-from backend.models import User, DrillResult, SkillScore
+from backend.models import User, DrillResult, SkillScore, QuestionMastery
 from pydantic import BaseModel as _BaseModel, Field
-from backend.schemas import RiskCalcSubmit, DRILLS_PER_DAY, VALID_SKILLS
+from backend.schemas import RiskCalcSubmit, DRILLS_PER_DAY, VALID_SKILLS, VALID_DRILL_KEYS
 from backend.services.claude import call_claude
 import anthropic as _anthropic
 
@@ -63,6 +63,57 @@ def _update_skill_score(user_id: int, skill: str, db: Session):
     else:
         db.add(SkillScore(user_id=user_id, skill=skill, score=round(ema, 2)))
     db.commit()
+
+
+def _apply_mastery_transition(state: str, streak: int, is_correct: bool) -> tuple[str, int]:
+    if is_correct:
+        if state == 'new':
+            return 'learning', 1
+        if state == 'learning':
+            new_streak = streak + 1
+            return ('mastered', 3) if new_streak >= 3 else ('learning', new_streak)
+        return state, streak  # mastered: shouldn't be shown, handle gracefully
+    else:
+        if state == 'learning':
+            return 'new', 0
+        return state, streak  # new stays new; mastered shouldn't appear
+
+
+@router.get("/mastery/all")
+def get_all_mastery(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    rows = (
+        db.query(QuestionMastery)
+        .filter(QuestionMastery.user_id == current_user.id)
+        .all()
+    )
+    result: dict[str, list] = {}
+    for r in rows:
+        result.setdefault(r.drill_key, []).append(
+            {"bank_idx": r.bank_idx, "state": r.state, "correct_streak": r.correct_streak}
+        )
+    return result
+
+
+@router.get("/mastery/{drill_key}")
+def get_mastery(
+    drill_key: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if drill_key not in VALID_DRILL_KEYS:
+        raise HTTPException(400, f"invalid drill_key: {drill_key}")
+    rows = (
+        db.query(QuestionMastery)
+        .filter(
+            QuestionMastery.user_id == current_user.id,
+            QuestionMastery.drill_key == drill_key,
+        )
+        .all()
+    )
+    return [{"bank_idx": r.bank_idx, "state": r.state, "correct_streak": r.correct_streak} for r in rows]
 
 
 @router.get("/today")

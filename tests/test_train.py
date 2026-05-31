@@ -141,3 +141,47 @@ def test_question_mastery_model_defaults():
     assert row.drill_key == 'entry_timing'
     assert row.bank_idx == 3
     db.close()
+
+
+from backend.routers.train import _apply_mastery_transition
+
+
+def test_transition_new_correct_becomes_learning():
+    state, streak = _apply_mastery_transition('new', 0, True)
+    assert state == 'learning'
+    assert streak == 1
+
+
+def test_transition_learning_correct_increments_streak():
+    state, streak = _apply_mastery_transition('learning', 1, True)
+    assert state == 'learning'
+    assert streak == 2
+
+
+def test_transition_learning_streak_2_correct_becomes_mastered():
+    state, streak = _apply_mastery_transition('learning', 2, True)
+    assert state == 'mastered'
+    assert streak == 3
+
+
+def test_transition_learning_wrong_becomes_new():
+    state, streak = _apply_mastery_transition('learning', 1, False)
+    assert state == 'new'
+    assert streak == 0
+
+
+def test_transition_new_wrong_stays_new():
+    state, streak = _apply_mastery_transition('new', 0, False)
+    assert state == 'new'
+    assert streak == 0
+
+
+def test_get_mastery_empty_with_no_history():
+    resp = client.get("/api/train/mastery/entry_timing")
+    assert resp.status_code == 200
+    assert resp.json() == []
+
+
+def test_get_mastery_invalid_drill_key_returns_400():
+    resp = client.get("/api/train/mastery/not_a_drill")
+    assert resp.status_code == 400
