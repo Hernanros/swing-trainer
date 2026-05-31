@@ -128,3 +128,43 @@ def test_today_counts_completed_drills():
     resp = client.get("/api/train/today")
     assert resp.json()["drills_completed"] == 1
     assert resp.json()["remaining"] == 1
+
+
+def test_question_weights_empty_with_no_history():
+    resp = client.get("/api/train/question-weights/risk_sizing")
+    assert resp.status_code == 200
+    assert resp.json() == {"weights": {}}
+
+
+def test_question_weights_accumulates_from_detail_json():
+    # submit a quiz where bank_idx=0 was answered wrong and bank_idx=1 was correct
+    detail = [
+        {"q_idx": 0, "bank_idx": 0, "chosen": 1, "answer": 0, "is_correct": False},
+        {"q_idx": 1, "bank_idx": 1, "chosen": 2, "answer": 2, "is_correct": True},
+    ]
+    client.post("/api/train/quiz/submit", json={
+        "skill": "risk_sizing", "drill_type": "quiz", "score": 50.0, "detail": detail,
+    })
+    resp = client.get("/api/train/question-weights/risk_sizing")
+    assert resp.status_code == 200
+    weights = resp.json()["weights"]
+    # bank_idx 0 was wrong → high weight (1.0 - 0.0 = 1.0, capped at 1.0)
+    assert weights["0"] == pytest.approx(1.0, abs=0.01)
+    # bank_idx 1 was correct → low weight (max(0.2, 1.0 - 1.0) = 0.2)
+    assert weights["1"] == pytest.approx(0.2, abs=0.01)
+
+
+def test_question_weights_rejects_invalid_skill():
+    resp = client.get("/api/train/question-weights/not_a_skill")
+    assert resp.status_code == 400
+
+
+def test_question_weights_ignores_missing_bank_idx():
+    # detail items without bank_idx should be skipped silently
+    detail = [{"q_idx": 0, "chosen": 1, "answer": 0, "is_correct": False}]
+    client.post("/api/train/quiz/submit", json={
+        "skill": "risk_sizing", "drill_type": "quiz", "score": 0.0, "detail": detail,
+    })
+    resp = client.get("/api/train/question-weights/risk_sizing")
+    assert resp.status_code == 200
+    assert resp.json()["weights"] == {}

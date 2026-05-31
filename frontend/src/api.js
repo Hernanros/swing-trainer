@@ -71,7 +71,8 @@ export const api = {
     today:       ()     => request('GET',  '/train/today'),
     generateRisk:()     => request('GET',  '/train/risk-calc/generate'),
     submitRisk:  (body) => request('POST', '/train/risk-calc/submit', body),
-    submitQuiz:  (body) => request('POST', '/train/quiz/submit', body),
+    submitQuiz:        (body)  => request('POST', '/train/quiz/submit', body),
+    getQuestionWeights: (skill) => request('GET',  `/train/question-weights/${encodeURIComponent(skill)}`),
     aiDrill:     (body) => request('POST', '/train/ai-drill', body),
   },
   tips: {

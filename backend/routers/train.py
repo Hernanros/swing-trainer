@@ -136,6 +136,53 @@ def submit_risk_calc(
     }
 
 
+@router.get("/question-weights/{skill}")
+def get_question_weights(
+    skill: str,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if skill not in VALID_SKILLS:
+        raise HTTPException(400, f"invalid skill: {skill}")
+
+    from datetime import timedelta
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    results = (
+        db.query(DrillResult)
+        .filter(
+            DrillResult.user_id == current_user.id,
+            DrillResult.skill == skill,
+            DrillResult.detail_json.isnot(None),
+            DrillResult.created_at >= cutoff,
+        )
+        .all()
+    )
+
+    attempts: dict[str, dict] = {}
+    for r in results:
+        try:
+            detail = json.loads(r.detail_json)
+            for item in detail:
+                bidx = item.get("bank_idx")
+                if bidx is None:
+                    continue
+                key = str(bidx)
+                if key not in attempts:
+                    attempts[key] = {"total": 0, "correct": 0}
+                attempts[key]["total"] += 1
+                if item.get("is_correct"):
+                    attempts[key]["correct"] += 1
+        except (json.JSONDecodeError, TypeError):
+            continue
+
+    weights = {}
+    for key, data in attempts.items():
+        accuracy = data["correct"] / data["total"] if data["total"] > 0 else 0.5
+        weights[key] = round(max(0.2, 1.0 - accuracy), 3)
+
+    return {"weights": weights}
+
+
 @router.post("/quiz/submit")
 def submit_quiz(
     body: QuizSubmit,
