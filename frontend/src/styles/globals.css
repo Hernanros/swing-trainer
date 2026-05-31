@@ -165,6 +165,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 .drill-list-row:hover { border-color: var(--border2); }
 .drill-list-title { font-weight: 600; color: var(--text); font-size: 0.95em; }
 .drill-list-skill { font-size: 0.78em; color: var(--muted); margin-top: 3px; text-transform: capitalize; }
+.mastery-bar-track { height: 6px; background: var(--surface2); border-radius: 3px; overflow: hidden; display: flex; margin-top: 6px; }
 
 /* Quiz */
 .quiz-options { display: flex; flex-direction: column; gap: 8px; }
