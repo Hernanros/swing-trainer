@@ -1,32 +1,15 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useMemo } from 'react'
 import { api } from '../../api'
 import { DRILL_QUESTIONS } from '../../data/drillQuestions'
 import DrillChart from '../DrillChart'
 
-function weightedSample(bank, weights, n) {
-  const pool = bank.map((q, i) => ({
-    ...q,
-    bank_idx: i,
-    _w: weights[String(i)] ?? 0.5,
-  }))
-  const result = []
-  const remaining = [...pool]
-  for (let pick = 0; pick < Math.min(n, remaining.length); pick++) {
-    const total = remaining.reduce((s, item) => s + item._w, 0)
-    let rand = Math.random() * total
-    let chosen = remaining.length - 1
-    for (let i = 0; i < remaining.length; i++) {
-      rand -= remaining[i]._w
-      if (rand <= 0) { chosen = i; break }
-    }
-    result.push(remaining[chosen])
-    remaining.splice(chosen, 1)
-  }
-  return result
-}
-
 export default function QuizDrill({ skill, drillKey, drillType, onComplete, questions: questionsProp }) {
-  const [questions, setQuestions] = useState(null)
+  const questions = useMemo(() => {
+    if (questionsProp && questionsProp.length > 0) return questionsProp
+    const bank = DRILL_QUESTIONS[drillKey] || DRILL_QUESTIONS[skill] || []
+    return [...bank].sort(() => Math.random() - 0.5).slice(0, 5)
+  }, [skill, drillKey, questionsProp])
+
   const [idx, setIdx] = useState(0)
   const [selected, setSelected] = useState(null)
   const [answered, setAnswered] = useState(false)
@@ -35,45 +18,14 @@ export default function QuizDrill({ skill, drillKey, drillType, onComplete, ques
   const [submitting, setSubmitting] = useState(false)
   const [answers, setAnswers] = useState([])
 
-  useEffect(() => {
-    async function init() {
-      if (questionsProp && questionsProp.length > 0) {
-        setQuestions(questionsProp)
-        return
-      }
-      const bank = DRILL_QUESTIONS[drillKey] || DRILL_QUESTIONS[skill] || []
-      if (bank.length === 0) { setQuestions([]); return }
-
-      let weights = {}
-      try {
-        const res = await api.train.getQuestionWeights(skill)
-        weights = res.weights || {}
-      } catch (_) {
-        // fall back to uniform weights
-      }
-
-      setQuestions(weightedSample(bank, weights, 5))
-    }
-    init()
-  }, [skill, drillKey, questionsProp])
-
-  const q = questions?.[idx]
+  const q = questions[idx]
 
   async function handleSelect(i) {
     if (answered) return
     setSelected(i)
     setAnswered(true)
     if (i === q.correct) setScore(s => s + 1)
-    setAnswers(prev => [
-      ...prev,
-      {
-        q_idx: idx,
-        bank_idx: q.bank_idx ?? null,
-        chosen: i,
-        answer: q.correct,
-        is_correct: i === q.correct,
-      },
-    ])
+    setAnswers(prev => [...prev, { q_idx: idx, chosen: i, answer: q.correct, is_correct: i === q.correct }])
   }
 
   async function next() {
@@ -93,10 +45,6 @@ export default function QuizDrill({ skill, drillKey, drillType, onComplete, ques
         setDone(true)
       }
     }
-  }
-
-  if (!questions) {
-    return <div className="drill-card" style={{ color: 'var(--muted)', textAlign: 'center' }}>Loading…</div>
   }
 
   if (done) {
