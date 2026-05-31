@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useUser } from '../context/UserContext'
 import { api } from '../api'
+import { DRILL_QUESTIONS } from '../data/drillQuestions'
 
 const SKILL_LABELS = {
   chart_reading:        'Chart Reading',
@@ -10,6 +11,18 @@ const SKILL_LABELS = {
   trade_management:     'Trade Management',
   emotional_discipline: 'Emotional Discipline',
 }
+
+const DRILL_KEY_LABELS = {
+  setup_selection:      'Setup Selection',
+  entry_timing:         'Entry Timing',
+  trade_management:     'Trade Management',
+  emotional_discipline: 'Emotional Discipline',
+  chart_reading:        'Chart Reading',
+  chart_patterns:       'Chart Patterns',
+  support_resistance:   'Support & Resistance',
+  channels:             'Channels',
+}
+const DRILL_KEYS = Object.keys(DRILL_KEY_LABELS)
 
 function StatTile({ label, value, suffix = '', color }) {
   return (
@@ -31,6 +44,7 @@ export default function Progress() {
   const [analyzing, setAnalyzing]     = useState(false)
   const [analyzeErr, setAnalyzeErr]   = useState(null)
   const [loading, setLoading]         = useState(true)
+  const [masteryByKey, setMasteryByKey] = useState({})
 
   useEffect(() => {
     Promise.all([
@@ -38,11 +52,13 @@ export default function Progress() {
       api.users.skills(user.id),
       api.progress.patterns(),
       api.progress.setups(),
-    ]).then(([s, sk, pd, su]) => {
+      api.train.getAllMastery(),
+    ]).then(([s, sk, pd, su, mb]) => {
       setStats(s)
       setSkills(sk)
       setPatternData(pd)
       setSetups(su)
+      setMasteryByKey(mb)
     }).catch(err => { console.error('Progress load failed:', err) }).finally(() => setLoading(false))
   }, [user.id])
 
@@ -210,6 +226,37 @@ export default function Progress() {
           </table>
         </div>
       )}
+
+      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
+        <div style={{ fontWeight: 700, color: 'var(--text)', fontSize: 14, marginBottom: 14 }}>Question Mastery</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {DRILL_KEYS.map(dk => {
+            const total = DRILL_QUESTIONS[dk]?.length || 0
+            const records = masteryByKey[dk] || []
+            const mastered = records.filter(r => r.state === 'mastered').length
+            const learning = records.filter(r => r.state === 'learning').length
+            const newCount = total - mastered - learning
+            const isComplete = mastered >= total
+            return (
+              <div key={dk} className="skill-bar-row">
+                <div className="skill-bar-header">
+                  <span className="skill-bar-name">{DRILL_KEY_LABELS[dk]}</span>
+                  <span className="skill-bar-score" style={{ color: isComplete ? 'var(--green)' : 'var(--text2)' }}>
+                    {isComplete ? 'Complete ✓' : `${mastered}/${total}`}
+                  </span>
+                </div>
+                <div className="mastery-bar-track">
+                  <div style={{ width: `${(mastered / total) * 100}%`, background: 'var(--green)', height: '100%' }} />
+                  <div style={{ width: `${(learning / total) * 100}%`, background: 'var(--yellow)', height: '100%' }} />
+                </div>
+                <div style={{ fontSize: '0.75em', color: 'var(--muted)', marginTop: 3 }}>
+                  {mastered} mastered · {learning} learning · {newCount} new
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
 
       {stats && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
