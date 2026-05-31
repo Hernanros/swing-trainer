@@ -185,3 +185,106 @@ def test_get_mastery_empty_with_no_history():
 def test_get_mastery_invalid_drill_key_returns_400():
     resp = client.get("/api/train/mastery/not_a_drill")
     assert resp.status_code == 400
+
+
+def test_submit_quiz_with_drill_key_creates_mastery_rows():
+    detail = [
+        {"q_idx": 0, "bank_idx": 0, "chosen": 1, "answer": 0, "is_correct": False},
+        {"q_idx": 1, "bank_idx": 2, "chosen": 2, "answer": 2, "is_correct": True},
+    ]
+    resp = client.post("/api/train/quiz/submit", json={
+        "skill": "entry_timing",
+        "drill_type": "quiz",
+        "score": 50.0,
+        "detail": detail,
+        "drill_key": "entry_timing",
+    })
+    assert resp.status_code == 200
+
+    mastery = client.get("/api/train/mastery/entry_timing").json()
+    by_idx = {r["bank_idx"]: r for r in mastery}
+
+    assert by_idx[0]["state"] == "new"
+    assert by_idx[0]["correct_streak"] == 0
+    assert by_idx[2]["state"] == "learning"
+    assert by_idx[2]["correct_streak"] == 1
+
+
+def test_mastery_advances_to_mastered_after_three_corrects():
+    for _ in range(3):
+        client.post("/api/train/quiz/submit", json={
+            "skill": "entry_timing",
+            "drill_type": "quiz",
+            "score": 100.0,
+            "detail": [{"q_idx": 0, "bank_idx": 5, "chosen": 0, "answer": 0, "is_correct": True}],
+            "drill_key": "entry_timing",
+        })
+
+    mastery = client.get("/api/train/mastery/entry_timing").json()
+    row = next(r for r in mastery if r["bank_idx"] == 5)
+    assert row["state"] == "mastered"
+    assert row["correct_streak"] == 3
+
+
+def test_mastery_drops_on_wrong_answer():
+    client.post("/api/train/quiz/submit", json={
+        "skill": "entry_timing", "drill_type": "quiz", "score": 100.0,
+        "detail": [{"q_idx": 0, "bank_idx": 7, "chosen": 0, "answer": 0, "is_correct": True}],
+        "drill_key": "entry_timing",
+    })
+    client.post("/api/train/quiz/submit", json={
+        "skill": "entry_timing", "drill_type": "quiz", "score": 0.0,
+        "detail": [{"q_idx": 0, "bank_idx": 7, "chosen": 1, "answer": 0, "is_correct": False}],
+        "drill_key": "entry_timing",
+    })
+
+    mastery = client.get("/api/train/mastery/entry_timing").json()
+    row = next(r for r in mastery if r["bank_idx"] == 7)
+    assert row["state"] == "new"
+    assert row["correct_streak"] == 0
+
+
+def test_submit_without_drill_key_creates_no_mastery_rows():
+    detail = [{"q_idx": 0, "bank_idx": 0, "chosen": 0, "answer": 0, "is_correct": True}]
+    client.post("/api/train/quiz/submit", json={
+        "skill": "entry_timing", "drill_type": "quiz", "score": 100.0, "detail": detail,
+    })
+    mastery = client.get("/api/train/mastery/entry_timing").json()
+    assert mastery == []
+
+
+def test_submit_detail_without_bank_idx_is_skipped():
+    detail = [{"q_idx": 0, "chosen": 0, "answer": 0, "is_correct": True}]
+    client.post("/api/train/quiz/submit", json={
+        "skill": "entry_timing", "drill_type": "quiz", "score": 100.0,
+        "detail": detail, "drill_key": "entry_timing",
+    })
+    mastery = client.get("/api/train/mastery/entry_timing").json()
+    assert mastery == []
+
+
+def test_get_all_mastery_returns_by_drill_key():
+    client.post("/api/train/quiz/submit", json={
+        "skill": "entry_timing", "drill_type": "quiz", "score": 100.0,
+        "detail": [{"q_idx": 0, "bank_idx": 1, "chosen": 0, "answer": 0, "is_correct": True}],
+        "drill_key": "entry_timing",
+    })
+    client.post("/api/train/quiz/submit", json={
+        "skill": "chart_reading", "drill_type": "pattern_quiz", "score": 100.0,
+        "detail": [{"q_idx": 0, "bank_idx": 0, "chosen": 0, "answer": 0, "is_correct": True}],
+        "drill_key": "chart_patterns",
+    })
+
+    resp = client.get("/api/train/mastery/all")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "entry_timing" in data
+    assert "chart_patterns" in data
+    assert data["entry_timing"][0]["bank_idx"] == 1
+    assert data["chart_patterns"][0]["bank_idx"] == 0
+
+
+def test_get_all_mastery_empty_with_no_history():
+    resp = client.get("/api/train/mastery/all")
+    assert resp.status_code == 200
+    assert resp.json() == {}

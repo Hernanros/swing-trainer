@@ -3,6 +3,7 @@ import logging
 import random
 import time
 from datetime import datetime, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.database import get_db
@@ -21,6 +22,7 @@ class QuizSubmit(_BaseModel):
     drill_type: str
     score: float   # 0 or 100
     detail: list = []
+    drill_key: Optional[str] = None
 
 
 class AIDrillRequest(_BaseModel):
@@ -77,6 +79,33 @@ def _apply_mastery_transition(state: str, streak: int, is_correct: bool) -> tupl
         if state == 'learning':
             return 'new', 0
         return state, streak  # new stays new; mastered shouldn't appear
+
+
+def _upsert_mastery(user_id: int, drill_key: str, detail: list, db: Session) -> None:
+    for item in detail:
+        bidx = item.get("bank_idx")
+        if bidx is None:
+            continue
+        is_correct = bool(item.get("is_correct"))
+        row = (
+            db.query(QuestionMastery)
+            .filter(
+                QuestionMastery.user_id == user_id,
+                QuestionMastery.drill_key == drill_key,
+                QuestionMastery.bank_idx == bidx,
+            )
+            .first()
+        )
+        if row is None:
+            row = QuestionMastery(
+                user_id=user_id, drill_key=drill_key, bank_idx=bidx,
+                state='new', correct_streak=0,
+            )
+            db.add(row)
+        row.state, row.correct_streak = _apply_mastery_transition(
+            row.state, row.correct_streak, is_correct
+        )
+    db.commit()
 
 
 @router.get("/mastery/all")
@@ -207,6 +236,8 @@ def submit_quiz(
     ))
     db.commit()
     _update_skill_score(current_user.id, body.skill, db)
+    if body.drill_key and body.drill_key in VALID_DRILL_KEYS:
+        _upsert_mastery(current_user.id, body.drill_key, body.detail, db)
     return {"score": body.score}
 
 
