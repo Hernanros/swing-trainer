@@ -1,15 +1,28 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useEffect } from 'react'
 import { api } from '../../api'
 import { DRILL_QUESTIONS } from '../../data/drillQuestions'
 import DrillChart from '../DrillChart'
 
-export default function QuizDrill({ skill, drillKey, drillType, onComplete, questions: questionsProp }) {
-  const questions = useMemo(() => {
-    if (questionsProp && questionsProp.length > 0) return questionsProp
-    const bank = DRILL_QUESTIONS[drillKey] || DRILL_QUESTIONS[skill] || []
-    return [...bank].sort(() => Math.random() - 0.5).slice(0, 5)
-  }, [skill, drillKey, questionsProp])
+function selectQuestions(bank, masteryRecords) {
+  const masteryMap = {}
+  for (const r of masteryRecords) {
+    masteryMap[r.bank_idx] = r.state
+  }
+  const learning = []
+  const newQ = []
+  bank.forEach((q, i) => {
+    const state = masteryMap[i] ?? 'new'
+    if (state === 'mastered') return
+    const item = { ...q, bank_idx: i }
+    if (state === 'learning') learning.push(item)
+    else newQ.push(item)
+  })
+  return [...learning, ...newQ].slice(0, 5)
+}
 
+export default function QuizDrill({ skill, drillKey, drillType, onComplete, questions: questionsProp }) {
+  const [questions, setQuestions] = useState(null)
+  const [allMastered, setAllMastered] = useState(false)
   const [idx, setIdx] = useState(0)
   const [selected, setSelected] = useState(null)
   const [answered, setAnswered] = useState(false)
@@ -18,14 +31,42 @@ export default function QuizDrill({ skill, drillKey, drillType, onComplete, ques
   const [submitting, setSubmitting] = useState(false)
   const [answers, setAnswers] = useState([])
 
-  const q = questions[idx]
+  useEffect(() => {
+    async function init() {
+      if (questionsProp && questionsProp.length > 0) {
+        setQuestions(questionsProp)
+        return
+      }
+      const bank = DRILL_QUESTIONS[drillKey] || DRILL_QUESTIONS[skill] || []
+      if (bank.length === 0) { setQuestions([]); return }
+
+      let masteryRecords = []
+      try {
+        masteryRecords = await api.train.getMastery(drillKey)
+      } catch (_) {
+        // network error — treat all questions as new
+      }
+
+      const selected = selectQuestions(bank, masteryRecords)
+      if (selected.length === 0) {
+        setAllMastered(true)
+      }
+      setQuestions(selected)
+    }
+    init()
+  }, [skill, drillKey, questionsProp])
+
+  const q = questions?.[idx]
 
   async function handleSelect(i) {
     if (answered) return
     setSelected(i)
     setAnswered(true)
     if (i === q.correct) setScore(s => s + 1)
-    setAnswers(prev => [...prev, { q_idx: idx, chosen: i, answer: q.correct, is_correct: i === q.correct }])
+    setAnswers(prev => [
+      ...prev,
+      { q_idx: idx, bank_idx: q.bank_idx ?? null, chosen: i, answer: q.correct, is_correct: i === q.correct },
+    ])
   }
 
   async function next() {
@@ -38,13 +79,36 @@ export default function QuizDrill({ skill, drillKey, drillType, onComplete, ques
       setSubmitting(true)
       try {
         if (skill !== 'custom') {
-          await api.train.submitQuiz({ skill, drill_type: drillType, score: finalScore, detail: answers })
+          await api.train.submitQuiz({
+            skill,
+            drill_type: drillType,
+            score: finalScore,
+            detail: answers,
+            drill_key: drillKey ?? null,
+          })
         }
       } finally {
         setSubmitting(false)
         setDone(true)
       }
     }
+  }
+
+  if (allMastered) {
+    return (
+      <div className="drill-card" style={{ textAlign: 'center' }}>
+        <div style={{ fontSize: '2em', marginBottom: 8 }}>✓</div>
+        <div style={{ fontWeight: 700, color: 'var(--green)', marginBottom: 6 }}>All questions mastered</div>
+        <div style={{ color: 'var(--text2)', fontSize: '0.9em', marginBottom: 16 }}>
+          You've mastered every question in this drill.
+        </div>
+        <button className="btn-primary" onClick={onComplete}>Back to drills</button>
+      </div>
+    )
+  }
+
+  if (!questions) {
+    return <div className="drill-card" style={{ color: 'var(--muted)', textAlign: 'center' }}>Loading…</div>
   }
 
   if (done) {

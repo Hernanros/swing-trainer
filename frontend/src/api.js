@@ -68,11 +68,13 @@ export const api = {
     uncheck: (item_id) => request('DELETE', `/curriculum/check/${encodeURIComponent(item_id)}`),
   },
   train: {
-    today:       ()     => request('GET',  '/train/today'),
-    generateRisk:()     => request('GET',  '/train/risk-calc/generate'),
-    submitRisk:  (body) => request('POST', '/train/risk-calc/submit', body),
-    submitQuiz:  (body) => request('POST', '/train/quiz/submit', body),
-    aiDrill:     (body) => request('POST', '/train/ai-drill', body),
+    today:           ()         => request('GET',  '/train/today'),
+    generateRisk:    ()         => request('GET',  '/train/risk-calc/generate'),
+    submitRisk:      (body)     => request('POST', '/train/risk-calc/submit', body),
+    submitQuiz:      (body)     => request('POST', '/train/quiz/submit', body),
+    aiDrill:         (body)     => request('POST', '/train/ai-drill', body),
+    getMastery:      (drillKey) => request('GET',  `/train/mastery/${encodeURIComponent(drillKey)}`),
+    getAllMastery:    ()         => request('GET',  '/train/mastery/all'),
   },
   tips: {
     daily:   ()     => request('GET',  '/tips/daily'),
