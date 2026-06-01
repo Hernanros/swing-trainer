@@ -2,6 +2,7 @@ import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { UserProvider, useUser } from './context/UserContext'
 import Sidebar from './components/Sidebar'
+import BottomNav from './components/BottomNav'
 import Onboarding from './components/Onboarding'
 import Login from './components/Login'
 import Home from './pages/Home'
@@ -36,6 +37,7 @@ function AppShell() {
           <Route path="*"          element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <BottomNav />
     </div>
   )
 }
