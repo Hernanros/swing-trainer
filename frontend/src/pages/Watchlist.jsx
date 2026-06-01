@@ -79,6 +79,7 @@ export default function Watchlist() {
   const [loading, setLoading] = useState(true)
   const [chartSymbol, setChartSymbol] = useState(null)
   const [tagEditId, setTagEditId] = useState(null)
+  const [expandedRow, setExpandedRow] = useState(null)
 
   const load = useCallback(() => {
     api.watchlist.list().then(setItems).finally(() => setLoading(false))
@@ -138,6 +139,11 @@ export default function Watchlist() {
     }
   }
 
+  function handleRowClick(e, itemId) {
+    if (e.target.closest('button') || e.target.closest('input')) return
+    setExpandedRow(prev => prev === itemId ? null : itemId)
+  }
+
   if (loading) return <div className="loading">Loading…</div>
 
   return (
@@ -180,7 +186,12 @@ export default function Watchlist() {
             <span />
           </div>
           {items.map(item => (
-            <div className="wl-row" key={item.id} style={{ position: 'relative' }}>
+            <div
+              className={`wl-row${expandedRow === item.id ? ' expanded' : ''}`}
+              key={item.id}
+              style={{ position: 'relative' }}
+              onClick={e => handleRowClick(e, item.id)}
+            >
               <span
                 className="wl-symbol wl-symbol-link"
                 onClick={() => setChartSymbol(item.symbol)}
@@ -250,6 +261,29 @@ export default function Watchlist() {
                   )}
                 </div>
               </div>
+              {expandedRow === item.id && (
+                <div className="wl-mobile-detail">
+                  <div style={{ display: 'flex', gap: 16, marginBottom: 10 }}>
+                    <div>
+                      <div style={{ fontSize: '0.72em', color: 'var(--muted)', marginBottom: 3 }}>Earnings</div>
+                      <EarningsCell symbol={item.symbol} />
+                    </div>
+                    {item.notes && (
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: '0.72em', color: 'var(--muted)', marginBottom: 3 }}>Notes</div>
+                        <div style={{ fontSize: '0.82em', color: 'var(--text2)' }}>{item.notes}</div>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    className="btn-primary"
+                    style={{ width: '100%' }}
+                    onClick={e => { e.stopPropagation(); navigate('/journal', { state: { prefill: { symbol: item.symbol } } }) }}
+                  >
+                    Trade →
+                  </button>
+                </div>
+              )}
             </div>
           ))}
         </div>

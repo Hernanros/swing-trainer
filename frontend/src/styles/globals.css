@@ -254,6 +254,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100; display: flex; align-items: center; justify-content: center; }
 .curr-drill-modal { padding: 0; max-height: 80vh; overflow-y: auto; }
 .curr-practice-btn { font-size: 0.72rem; margin-left: 4px; }
+.wl-mobile-detail { display: none; }
 
 /* ── Bottom nav (hidden on desktop, shown on mobile) ── */
 .bottom-nav {
@@ -360,4 +361,18 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
   /* Watchlist add form — notes wraps to second line */
   .wl-add-form { flex-wrap: wrap; }
   .wl-input-notes { width: 100%; }
+
+  /* Watchlist — 3-column mobile grid: symbol | price/change | delete */
+  .wl-header { grid-template-columns: 1fr auto 40px; }
+  .wl-header span:nth-child(3),
+  .wl-header span:nth-child(4),
+  .wl-header span:nth-child(5) { display: none; }
+
+  .wl-row { grid-template-columns: 1fr auto 40px; cursor: pointer; }
+  .wl-row > span:nth-child(3),
+  .wl-row > span:nth-child(4),
+  .wl-row > span:nth-child(5) { display: none; }
+
+  .wl-row.expanded .wl-mobile-detail { display: block; }
+  .wl-mobile-detail { grid-column: 1 / -1; padding: 10px 0 4px; border-top: 1px solid var(--border); }
 }
