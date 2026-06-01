@@ -164,7 +164,7 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
         onClick={onClose}
         style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 99 }}
       />
-      <div style={{
+      <div className="trade-drawer" style={{
         position: 'fixed', top: 0, right: 0, bottom: 0, width: 300,
         background: 'var(--surface)', borderLeft: '1px solid var(--border)',
         zIndex: 100, overflowY: 'auto', padding: 20,

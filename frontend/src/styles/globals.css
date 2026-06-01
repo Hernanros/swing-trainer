@@ -385,4 +385,15 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
   .journal-table td:nth-child(5),
   .journal-table th:nth-child(7),
   .journal-table td:nth-child(7) { display: none; }
+
+  /* TradeDrawer — full-screen bottom sheet on mobile */
+  .trade-drawer {
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    border-left: none !important;
+    z-index: 300 !important;
+  }
 }
