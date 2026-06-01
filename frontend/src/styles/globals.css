@@ -375,4 +375,14 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
 
   .wl-row.expanded .wl-mobile-detail { display: block; }
   .wl-mobile-detail { grid-column: 1 / -1; padding: 10px 0 4px; border-top: 1px solid var(--border); }
+
+  /* Journal table — hide Dir, Entry, Exit, R columns */
+  .journal-table th:nth-child(3),
+  .journal-table td:nth-child(3),
+  .journal-table th:nth-child(4),
+  .journal-table td:nth-child(4),
+  .journal-table th:nth-child(5),
+  .journal-table td:nth-child(5),
+  .journal-table th:nth-child(7),
+  .journal-table td:nth-child(7) { display: none; }
 }

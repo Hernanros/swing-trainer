@@ -89,7 +89,7 @@ export default function Journal() {
 
       {!loading && trades.length > 0 && (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <table className="journal-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--muted)', textAlign: 'left' }}>
                 {['Date','Symbol','Dir','Entry','Exit','P&L','R','Status',''].map(h => (
