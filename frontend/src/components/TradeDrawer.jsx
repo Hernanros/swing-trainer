@@ -25,6 +25,16 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
   const [setups, setSetups]   = useState([])
   const [rules, setRules]     = useState([])
   const [checked, setChecked] = useState({})
+  const [helperAccount, setHelperAccount] = useState('')
+  const [helperRisk, setHelperRisk]       = useState('1')
+  const suggestedShares = (() => {
+    const account = +helperAccount
+    const risk    = +helperRisk
+    const entry   = +form.entry_price
+    const stop    = +form.stop_price
+    if (!account || !risk || !entry || !stop || entry === stop) return 0
+    return Math.floor((account * risk / 100) / Math.abs(entry - stop))
+  })()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -276,6 +286,59 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
             </div>
 
             {field('entry_price',  'Entry Price',  'number', '900.00')}
+            {/* Size Helper */}
+            <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '10px 12px' }}>
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8 }}>
+                Size Helper <span style={{ fontSize: 10, color: 'var(--dim)' }}>(optional)</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 11, color: 'var(--muted)' }}>Account $</label>
+                  <input
+                    type="number"
+                    value={helperAccount}
+                    onChange={e => setHelperAccount(e.target.value)}
+                    placeholder="25000"
+                    style={{
+                      background: 'var(--bg)',
+                      border: '1px solid var(--border2)',
+                      borderRadius: 6, color: 'var(--text)', padding: '6px 8px',
+                      fontSize: 13, outline: 'none', width: '100%',
+                    }}
+                  />
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <label style={{ fontSize: 11, color: 'var(--muted)' }}>Risk %</label>
+                  <input
+                    type="number"
+                    value={helperRisk}
+                    onChange={e => setHelperRisk(e.target.value)}
+                    placeholder="1"
+                    style={{
+                      background: 'var(--bg)',
+                      border: '1px solid var(--border2)',
+                      borderRadius: 6, color: 'var(--text)', padding: '6px 8px',
+                      fontSize: 13, outline: 'none', width: '100%',
+                    }}
+                  />
+                </div>
+              </div>
+              {suggestedShares > 0 && (
+                <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text2)' }}>
+                    Suggested: <strong style={{ color: 'var(--text)' }}>{suggestedShares} shares</strong>
+                  </span>
+                  <button
+                    type="button"
+                    className="btn-sm btn-ghost"
+                    style={{ fontSize: 11 }}
+                    onClick={() => set('shares', String(suggestedShares))}
+                  >
+                    Use
+                  </button>
+                </div>
+              )}
+            </div>
             {field('shares',       'Shares',       'number', '10')}
             {field('stop_price',   'Stop Price',   'number', '885.00')}
             {field('target_price', 'Target Price', 'number', '940.00')}
