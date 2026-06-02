@@ -145,6 +145,7 @@ class AIPattern(Base):
     severity = Column(String, nullable=False)        # problem | watch | strength
     detected_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     trade_range = Column(String, nullable=True)
+    skill = Column(String, nullable=True)
 
     user = relationship("User", back_populates="ai_patterns")
 

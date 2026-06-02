@@ -186,14 +186,17 @@ def generate_pattern_analysis(context: str) -> list:
         "Analyze this trader's journal and identify 3 to 5 recurring behavioral patterns.\n"
         "Return ONLY this XML — no other text:\n\n"
         "<patterns>\n"
-        "  <pattern severity=\"problem\">...</pattern>\n"
-        "  <pattern severity=\"watch\">...</pattern>\n"
+        "  <pattern severity=\"problem\" skill=\"trade_management\">...</pattern>\n"
+        "  <pattern severity=\"watch\" skill=\"emotional_discipline\">...</pattern>\n"
         "  <pattern severity=\"strength\">...</pattern>\n"
         "</patterns>\n\n"
         "Severity rules:\n"
         "- problem: a repeated mistake actively costing edge (cite trade counts)\n"
         "- watch: a tendency worth monitoring that isn't clearly hurting yet\n"
         "- strength: a discipline the trader is consistently getting right\n\n"
+        "Skill attribute (optional): set to the single most relevant skill from: "
+        "setup_selection, entry_timing, risk_sizing, trade_management, emotional_discipline, chart_reading. "
+        "Omit the attribute entirely if the pattern doesn't map cleanly to one skill.\n\n"
         "Each pattern must be one sentence, specific, and cite actual numbers where possible."
     )
     message = client.messages.create(
@@ -218,9 +221,10 @@ def generate_pattern_analysis(context: str) -> list:
     patterns = []
     for elem in root.findall("pattern"):
         severity = elem.get("severity", "").strip()
+        skill = elem.get("skill", "").strip() or None
         text = (elem.text or "").strip()
         if severity in ("problem", "watch", "strength") and text:
-            patterns.append({"severity": severity, "pattern_text": text})
+            patterns.append({"severity": severity, "pattern_text": text, "skill": skill})
     if not patterns:
         raise ValueError("No valid patterns parsed from Claude response")
     return patterns

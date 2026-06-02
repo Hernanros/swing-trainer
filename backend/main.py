@@ -95,6 +95,10 @@ async def lifespan(app: FastAPI):
             conn.execute(text("DROP TABLE trades_migrated"))
             conn.commit()
             _log.info("Migrated trades.setup_type to nullable")
+        ai_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(ai_patterns)"))]
+        if "skill" not in ai_cols:
+            conn.execute(text("ALTER TABLE ai_patterns ADD COLUMN skill TEXT"))
+            conn.commit()
     yield
 
 

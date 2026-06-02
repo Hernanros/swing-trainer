@@ -99,6 +99,36 @@ FAKE_PATTERNS = [
     {"severity": "strength","pattern_text": "No stops violated in last 15 trades"},
 ]
 
+FAKE_PATTERNS_WITH_SKILLS = [
+    {"severity": "problem", "pattern_text": "Cuts winners early in 8 of 12 trades", "skill": "trade_management"},
+    {"severity": "watch",   "pattern_text": "Overtrading on Mondays", "skill": "emotional_discipline"},
+    {"severity": "strength","pattern_text": "No stops violated in last 15 trades", "skill": None},
+]
+
+
+def test_analyze_stores_and_returns_skill():
+    _make_closed_trades(5)
+    with patch("backend.routers.progress.generate_pattern_analysis",
+               return_value=FAKE_PATTERNS_WITH_SKILLS):
+        resp = client.post("/api/progress/analyze-patterns")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data[0]["skill"] == "trade_management"
+    assert data[1]["skill"] == "emotional_discipline"
+    assert data[2]["skill"] is None
+
+
+def test_get_patterns_includes_skill():
+    _make_closed_trades(5)
+    with patch("backend.routers.progress.generate_pattern_analysis",
+               return_value=FAKE_PATTERNS_WITH_SKILLS):
+        client.post("/api/progress/analyze-patterns")
+    resp = client.get("/api/progress/patterns")
+    assert resp.status_code == 200
+    patterns = resp.json()["patterns"]
+    assert any(p["skill"] == "trade_management" for p in patterns)
+    assert any(p["skill"] is None for p in patterns)
+
 
 def test_patterns_returns_empty_when_none_exist():
     resp = client.get("/api/progress/patterns")

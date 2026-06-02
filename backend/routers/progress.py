@@ -88,6 +88,7 @@ def get_patterns(
                 "id": p.id,
                 "pattern_text": p.pattern_text,
                 "severity": p.severity,
+                "skill": p.skill,
                 "detected_at": p.detected_at.isoformat(),
             }
             for p in patterns
@@ -141,6 +142,7 @@ def analyze_patterns(
             user_id=current_user.id,
             pattern_text=p["pattern_text"],
             severity=p["severity"],
+            skill=p.get("skill"),
             detected_at=now,
             trade_range="last 20 trades",
         )
@@ -155,6 +157,7 @@ def analyze_patterns(
             "id": row.id,
             "pattern_text": row.pattern_text,
             "severity": row.severity,
+            "skill": row.skill,
             "detected_at": row.detected_at.isoformat(),
         }
         for row in new_rows
