@@ -28,6 +28,7 @@ class QuizSubmit(_BaseModel):
 class AIDrillRequest(_BaseModel):
     topic: str = Field(..., min_length=1, max_length=200)
     context: str = Field(..., max_length=1000)
+    skill: Optional[str] = None
     model_config = {"str_strip_whitespace": True}
 
 
@@ -242,11 +243,35 @@ def submit_quiz(
 
 
 @router.post("/ai-drill")
-def generate_ai_drill(body: AIDrillRequest, current_user: User = Depends(get_current_user)):
+def generate_ai_drill(
+    body: AIDrillRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    mastery_context = ""
+    if body.skill and body.skill in VALID_DRILL_KEYS:
+        rows = (
+            db.query(QuestionMastery)
+            .filter(
+                QuestionMastery.user_id == current_user.id,
+                QuestionMastery.drill_key == body.skill,
+            )
+            .all()
+        )
+        if rows:
+            new_count = sum(1 for r in rows if r.state == 'new')
+            learning_count = sum(1 for r in rows if r.state == 'learning')
+            mastered_count = sum(1 for r in rows if r.state == 'mastered')
+            mastery_context = (
+                f"\n\nStudent mastery for {body.skill}: "
+                f"{mastered_count} questions mastered, {learning_count} in progress, {new_count} not yet attempted. "
+                "Focus questions on concepts still in progress or not yet attempted — avoid re-testing already-mastered material."
+            )
+
     prompt = f"""You are a swing trading quiz generator.
 
 <topic>{body.topic}</topic>
-<context>{body.context}</context>
+<context>{body.context}</context>{mastery_context}
 
 Generate exactly 5 multiple-choice quiz questions testing understanding of this specific concept.
 Return ONLY a JSON array with this exact shape, no markdown, no explanation:

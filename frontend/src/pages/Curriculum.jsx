@@ -92,13 +92,13 @@ export default function Curriculum() {
     }
   }
 
-  async function openDrill(item) {
+  async function openDrill(item, skill) {
     setDrillModal({ topic: item.id, context: item.text })
     setDrillQuestions(null)
     setDrillError('')
     setDrillLoading(true)
     try {
-      const { questions } = await api.train.aiDrill({ topic: item.id, context: item.text })
+      const { questions } = await api.train.aiDrill({ topic: item.id, context: item.text, skill: skill || null })
       // Normalize AI fields to QuizDrill's expected shape
       const normalized = questions.map(q => ({
         q: q.q,
@@ -198,7 +198,7 @@ export default function Curriculum() {
                     >▶</a>
                     <button
                       className="curr-practice-btn btn-sm btn-ghost"
-                      onClick={e => { e.preventDefault(); e.stopPropagation(); openDrill(item) }}
+                      onClick={e => { e.preventDefault(); e.stopPropagation(); openDrill(item, group.skill) }}
                       title="Generate practice questions"
                     >Practice</button>
                   </label>

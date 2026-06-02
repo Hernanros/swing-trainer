@@ -8,6 +8,7 @@ from backend.main import app
 from backend.database import Base, get_db
 from backend.models import User, SkillScore, QuestionMastery
 import json
+from unittest.mock import patch
 
 TEST_DB_URL = "sqlite://"
 _engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -288,3 +289,49 @@ def test_get_all_mastery_empty_with_no_history():
     resp = client.get("/api/train/mastery/all")
     assert resp.status_code == 200
     assert resp.json() == {}
+
+
+_MOCK_AI_QUESTIONS = json.dumps([{
+    "q": f"Question {i}?",
+    "choices": ["A", "B", "C", "D"],
+    "answer": 0,
+    "explanation": "Because A."
+} for i in range(5)])
+
+
+def test_ai_drill_with_skill_returns_questions():
+    with patch("backend.routers.train.call_claude", return_value=_MOCK_AI_QUESTIONS):
+        resp = client.post("/api/train/ai-drill", json={
+            "topic": "entry timing",
+            "context": "How to time entries precisely",
+            "skill": "entry_timing",
+        })
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "questions" in data
+    assert len(data["questions"]) == 5
+
+
+def test_ai_drill_mastery_context_injected_in_prompt():
+    db = _Session()
+    user = db.query(User).first()
+    db.add(QuestionMastery(user_id=user.id, drill_key="entry_timing", bank_idx=0, state="learning", correct_streak=1))
+    db.add(QuestionMastery(user_id=user.id, drill_key="entry_timing", bank_idx=1, state="mastered", correct_streak=3))
+    db.commit()
+    db.close()
+
+    captured = {}
+
+    def _capture(prompt, max_tokens=1000):
+        captured["prompt"] = prompt
+        return _MOCK_AI_QUESTIONS
+
+    with patch("backend.routers.train.call_claude", side_effect=_capture):
+        resp = client.post("/api/train/ai-drill", json={
+            "topic": "entry timing",
+            "context": "How to time entries precisely",
+            "skill": "entry_timing",
+        })
+    assert resp.status_code == 200
+    assert "mastery" in captured["prompt"].lower()
+    assert "entry_timing" in captured["prompt"]
