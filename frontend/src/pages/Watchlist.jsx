@@ -9,6 +9,10 @@ const TAG_GROUPS = {
   Priority: ['High', 'Medium', 'Low'],
 }
 
+function getSetupType(tags) {
+  return (tags || []).find(t => TAG_GROUPS.Setup.includes(t)) || null
+}
+
 function QuoteCell({ symbol }) {
   const [quote, setQuote] = useState(null)
   const [err, setErr] = useState(false)
@@ -225,7 +229,7 @@ export default function Watchlist() {
                 <button
                   className="btn-sm btn-ghost"
                   style={{ fontSize: 11 }}
-                  onClick={() => navigate('/journal', { state: { prefill: { symbol: item.symbol } } })}
+                  onClick={() => navigate('/journal', { state: { prefill: { symbol: item.symbol, setup_type: getSetupType(item.tags) } } })}
                 >
                   Trade →
                 </button>
@@ -278,7 +282,7 @@ export default function Watchlist() {
                   <button
                     className="btn-primary"
                     style={{ width: '100%' }}
-                    onClick={e => { e.stopPropagation(); navigate('/journal', { state: { prefill: { symbol: item.symbol } } }) }}
+                    onClick={e => { e.stopPropagation(); navigate('/journal', { state: { prefill: { symbol: item.symbol, setup_type: getSetupType(item.tags) } } }) }}
                   >
                     Trade →
                   </button>

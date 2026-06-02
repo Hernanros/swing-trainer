@@ -70,7 +70,11 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
 
   useEffect(() => {
     if (mode === 'open' && prefill?.symbol) {
-      setForm(f => ({ ...f, symbol: prefill.symbol }))
+      setForm(f => ({
+        ...f,
+        symbol: prefill.symbol,
+        setup_type: prefill.setup_type || f.setup_type,
+      }))
     }
   }, [mode, prefill])
 
