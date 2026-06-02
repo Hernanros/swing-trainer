@@ -192,3 +192,13 @@ class QuestionMastery(Base):
     user = relationship("User", back_populates="question_mastery")
 
     __table_args__ = (UniqueConstraint('user_id', 'drill_key', 'bank_idx'),)
+
+
+class AccessRequest(Base):
+    __tablename__ = "access_requests"
+    id           = Column(Integer, primary_key=True)
+    email        = Column(String, nullable=False, unique=True)
+    name         = Column(String, nullable=True)
+    status       = Column(String, nullable=False, default="pending")  # pending | approved | rejected
+    requested_at = Column(DateTime, nullable=False)
+    reviewed_at  = Column(DateTime, nullable=True)
