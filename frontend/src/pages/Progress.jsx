@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useUser } from '../context/UserContext'
 import { api } from '../api'
 import { DRILL_QUESTIONS } from '../data/drillQuestions'
@@ -45,6 +46,7 @@ export default function Progress() {
   const [analyzeErr, setAnalyzeErr]   = useState(null)
   const [loading, setLoading]         = useState(true)
   const [masteryByKey, setMasteryByKey] = useState({})
+  const navigate = useNavigate()
 
   useEffect(() => {
     Promise.all([
@@ -185,7 +187,20 @@ export default function Progress() {
               }}>
                 {p.severity}
               </span>
-              <span style={{ color: 'var(--text2)', fontSize: 13 }}>{p.pattern_text}</span>
+              <div style={{ flex: 1 }}>
+                <span style={{ color: 'var(--text2)', fontSize: 13 }}>{p.pattern_text}</span>
+                {p.skill && (
+                  <div style={{ marginTop: 4 }}>
+                    <button
+                      className="btn-sm btn-ghost"
+                      style={{ fontSize: 11 }}
+                      onClick={() => navigate(`/train?skill=${encodeURIComponent(p.skill)}`)}
+                    >
+                      Practice {SKILL_LABELS[p.skill] || p.skill.replace(/_/g, ' ')} →
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )
         })}

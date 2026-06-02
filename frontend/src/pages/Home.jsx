@@ -121,11 +121,22 @@ export default function Home() {
               <span style={{ fontWeight: 700, color: 'var(--text)', fontSize: 13 }}>Coaching Insight</span>
             </div>
             <div style={{ color: 'var(--text2)', fontSize: 13, marginBottom: 8 }}>{top.pattern_text || ''}</div>
-            <div
-              style={{ color: 'var(--accent)', fontSize: 12, cursor: 'pointer' }}
-              onClick={() => navigate('/progress')}
-            >
-              See full analysis →
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+              <div
+                style={{ color: 'var(--accent)', fontSize: 12, cursor: 'pointer' }}
+                onClick={() => navigate('/progress')}
+              >
+                See full analysis →
+              </div>
+              {top.skill && (
+                <button
+                  className="btn-sm btn-ghost"
+                  style={{ fontSize: 11, padding: '3px 10px' }}
+                  onClick={() => navigate(`/train?skill=${encodeURIComponent(top.skill)}`)}
+                >
+                  Practice {SKILL_LABEL[top.skill] || top.skill.replace(/_/g, ' ')} →
+                </button>
+              )}
             </div>
           </div>
         )
