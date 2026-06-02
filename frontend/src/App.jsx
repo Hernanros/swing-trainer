@@ -5,6 +5,8 @@ import Sidebar from './components/Sidebar'
 import BottomNav from './components/BottomNav'
 import Onboarding from './components/Onboarding'
 import Login from './components/Login'
+import Pending from './components/Pending'
+import Rejected from './components/Rejected'
 import Home from './pages/Home'
 import Train from './pages/Train'
 import Journal from './pages/Journal'
@@ -15,11 +17,13 @@ import Tips from './pages/Tips'
 import Curriculum from './pages/Curriculum'
 
 function AppShell() {
-  const { user, loading, authRequired } = useUser()
+  const { user, status, loading } = useUser()
 
-  if (loading)      return <div className="loading">Loading…</div>
-  if (authRequired) return <Login />
-  if (!user)        return <Onboarding />
+  if (loading)                  return <div className="loading">Loading…</div>
+  if (status === null)          return <Login />
+  if (status === "pending")     return <Pending />
+  if (status === "rejected")    return <Rejected />
+  if (!user)                    return <Onboarding />
 
   return (
     <div className="app-shell">
