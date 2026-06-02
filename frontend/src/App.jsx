@@ -15,6 +15,7 @@ import Watchlist from './pages/Watchlist'
 import Progress from './pages/Progress'
 import Tips from './pages/Tips'
 import Curriculum from './pages/Curriculum'
+import Admin from './pages/Admin'
 
 function AppShell() {
   const { user, status, loading } = useUser()
@@ -38,6 +39,7 @@ function AppShell() {
           <Route path="/progress"  element={<Progress />} />
           <Route path="/tips"       element={<Tips />} />
           <Route path="/curriculum" element={<Curriculum />} />
+          <Route path="/admin"      element={status === "admin" ? <Admin /> : <Navigate to="/" replace />} />
           <Route path="*"          element={<Navigate to="/" replace />} />
         </Routes>
       </main>

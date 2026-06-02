@@ -14,7 +14,7 @@ const NAV = [
 ]
 
 export default function Sidebar() {
-  const { user, users, switchUser } = useUser()
+  const { user, status } = useUser()
   const location = useLocation()
   const [analysisBadge, setAnalysisBadge] = useState(
     () => sessionStorage.getItem('analysis_available') === '1'
@@ -61,20 +61,14 @@ export default function Sidebar() {
 
       <div className="sidebar-spacer" />
 
-      {users.length > 1 && (
-        <div className="user-switcher">
-          <select
-            value={user?.id ?? ''}
-            onChange={e => {
-              const found = users.find(u => u.id === parseInt(e.target.value, 10))
-              if (found) switchUser(found)
-            }}
-          >
-            {users.map(u => (
-              <option key={u.id} value={u.id}>{u.name}</option>
-            ))}
-          </select>
-        </div>
+      {status === "admin" && (
+        <NavLink
+          to="/admin"
+          className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}
+        >
+          <span className="nav-icon">🛡️</span>
+          Admin
+        </NavLink>
       )}
     </nav>
   )

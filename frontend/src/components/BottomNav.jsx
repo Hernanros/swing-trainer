@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { useUser } from '../context/UserContext'
 
 const PRIMARY = [
   { to: '/',          icon: '🏠', label: 'Home',      exact: true },
@@ -16,6 +17,7 @@ const MORE = [
 ]
 
 export default function BottomNav() {
+  const { status } = useUser()
   const [moreOpen, setMoreOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
@@ -59,6 +61,12 @@ export default function BottomNav() {
               )}
             </button>
           ))}
+          {status === "admin" && (
+            <button className="bottom-nav-more-item" onClick={() => goTo('/admin')}>
+              <span>🛡️</span>
+              <span>Admin</span>
+            </button>
+          )}
         </div>
       )}
       <nav className="bottom-nav">
