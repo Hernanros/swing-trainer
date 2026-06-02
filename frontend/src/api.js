@@ -7,6 +7,27 @@ export class AuthError extends Error {
   }
 }
 
+export class NotFoundError extends Error {
+  constructor(message) {
+    super(message)
+    this.name = 'NotFoundError'
+  }
+}
+
+export async function getMe() {
+  const res = await fetch('/api/me', { credentials: 'include' })
+  if (res.status === 401) return null
+  if (!res.ok) throw new Error(`/api/me failed: ${res.status}`)
+  return res.json() // { email, status, name }
+}
+
+export async function getCurrentUser() {
+  const res = await fetch('/api/users/me', { credentials: 'include' })
+  if (res.status === 404) throw new NotFoundError('No user profile yet')
+  if (!res.ok) throw new Error(`/api/users/me failed: ${res.status}`)
+  return res.json() // User row
+}
+
 async function request(method, path, body) {
   const res = await fetch(`${BASE}${path}`, {
     method,

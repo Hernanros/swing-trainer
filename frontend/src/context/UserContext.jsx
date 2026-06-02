@@ -1,44 +1,53 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
-import { api, AuthError } from '../api'
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { getMe, getCurrentUser, NotFoundError } from '../api'
 
 const UserContext = createContext(null)
 
 export function UserProvider({ children }) {
-  const [user, setUser]                 = useState(null)
-  const [users, setUsers]               = useState([])
-  const [loading, setLoading]           = useState(true)
-  const [authRequired, setAuthRequired] = useState(false)
-  const [sessionEmail, setSessionEmail] = useState(null)
+  const [user, setUser]       = useState(null)
+  const [status, setStatus]   = useState(null)
+  const [email, setEmail]     = useState(null)
+  const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    const savedId = localStorage.getItem('activeUserId')
-    Promise.all([api.users.list(), api.me().catch(() => ({ email: null }))])
-      .then(([list, meData]) => {
-        setUsers(list)
-        setSessionEmail(meData.email)
-        if (savedId) {
-          const found = list.find(u => u.id === parseInt(savedId, 10))
-          if (found) setUser(found)
+  const fetchSession = useCallback(async () => {
+    setLoading(true)
+    try {
+      const meData = await getMe()
+      if (!meData) {
+        setStatus(null)
+        setEmail(null)
+        setUser(null)
+        return
+      }
+
+      setEmail(meData.email)
+      setStatus(meData.status)
+
+      if (meData.status === 'active' || meData.status === 'admin') {
+        try {
+          const userRow = await getCurrentUser()
+          setUser(userRow)
+        } catch (err) {
+          if (err instanceof NotFoundError) {
+            setUser(null) // onboarding screen will show
+          } else {
+            throw err
+          }
         }
-      })
-      .catch(err => {
-        if (err instanceof AuthError) setAuthRequired(true)
-      })
-      .finally(() => setLoading(false))
+      } else {
+        setUser(null)
+      }
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  function switchUser(u) {
-    setUser(u)
-    localStorage.setItem('activeUserId', String(u.id))
-  }
-
-  function addUser(u) {
-    setUsers(prev => [...prev, u])
-    switchUser(u)
-  }
+  useEffect(() => {
+    fetchSession()
+  }, [fetchSession])
 
   return (
-    <UserContext.Provider value={{ user, users, loading, authRequired, sessionEmail, switchUser, addUser }}>
+    <UserContext.Provider value={{ user, status, email, loading, refreshUser: fetchSession }}>
       {children}
     </UserContext.Provider>
   )
