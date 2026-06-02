@@ -24,8 +24,8 @@ const BUDGETS = [
 ]
 
 export default function Onboarding() {
-  const { users, addUser, switchUser, sessionEmail } = useUser()
-  const [step, setStep]     = useState(users.length > 0 ? 'pick' : 'name')
+  const { email, refreshUser } = useUser()
+  const [step, setStep]     = useState('name')
   const [name, setName]     = useState('')
   const [stage, setStage]   = useState('')
   const [budget, setBudget] = useState('')
@@ -43,36 +43,19 @@ export default function Onboarding() {
     setSaving(true)
     setError('')
     try {
-      const u = await api.users.create({
+      await api.users.create({
         name,
         trading_stage: stage,
         time_budget: budget,
         active_skills: skills,
-        email: sessionEmail || undefined,
+        email: email || undefined,
       })
-      addUser(u)
+      await refreshUser()
     } catch (e) {
       setError(e.message)
     } finally {
       setSaving(false)
     }
-  }
-
-  if (step === 'pick') {
-    return (
-      <div className="onboarding">
-        <h1>SwingTrainer</h1>
-        <h2>Who's training today?</h2>
-        <div className="user-pick-list">
-          {users.map(u => (
-            <button key={u.id} className="user-pick-btn" onClick={() => switchUser(u)}>
-              {u.name}
-            </button>
-          ))}
-        </div>
-        <button className="link-btn" onClick={() => setStep('name')}>+ New user</button>
-      </div>
-    )
   }
 
   return (
