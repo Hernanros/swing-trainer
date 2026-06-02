@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 import os
 import logging
-from fastapi import FastAPI, Depends, Request
+from fastapi import FastAPI, Depends, Request, HTTPException
 from fastapi.responses import FileResponse
 
 logging.basicConfig(level=logging.INFO)
@@ -10,7 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import text
-from backend.database import engine
+from sqlalchemy.orm import Session
+from backend.database import engine, get_db
 import backend.models as models  # noqa: F401
 from backend.routers import users
 from backend.routers import auth as auth_router
@@ -102,6 +103,22 @@ async def lifespan(app: FastAPI):
     yield
 
 
+def _resolve_me_status(email: str, db: Session) -> dict:
+    from backend.models import AccessRequest
+    from backend.auth import ADMIN_EMAIL, ALLOWED_EMAILS
+    if email == ADMIN_EMAIL:
+        return {"email": email, "status": "admin", "name": ""}
+    if email in ALLOWED_EMAILS:
+        return {"email": email, "status": "active", "name": ""}
+    req = db.query(AccessRequest).filter(AccessRequest.email == email).first()
+    if req is None:
+        return {"email": email, "status": "pending", "name": ""}
+    name = req.name or ""
+    if req.status == "approved":
+        return {"email": email, "status": "active", "name": name}
+    return {"email": email, "status": req.status, "name": name}
+
+
 app = FastAPI(title="SwingTrainer API", lifespan=lifespan)
 
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET, https_only=not _DEV_MODE)
@@ -136,9 +153,14 @@ def debug_routes():
 
 
 @app.get("/api/me")
-def get_me(request: Request):
-    email = request.session.get("email") if not _DEV_MODE else None
-    return {"email": email}
+def get_me(request: Request, db: Session = Depends(get_db)):
+    from backend.auth import DEV_BYPASS_AUTH
+    if DEV_BYPASS_AUTH:
+        return {"email": "dev@example.com", "status": "admin", "name": "Dev User"}
+    email = request.session.get("email")
+    if not email:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return _resolve_me_status(email, db)
 
 
 _frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")

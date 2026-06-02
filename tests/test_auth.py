@@ -63,3 +63,42 @@ def test_api_returns_401_without_session(monkeypatch):
     finally:
         if saved is not None:
             app.dependency_overrides[require_auth] = saved
+
+
+from backend.models import AccessRequest
+from backend.main import _resolve_me_status
+from datetime import datetime, timezone
+import backend.auth as auth_module_alias
+
+
+def test_resolve_me_status_returns_admin_for_admin_email(monkeypatch):
+    monkeypatch.setattr(auth_module_alias, "ADMIN_EMAIL", "admin@test.com")
+    monkeypatch.setattr(auth_module_alias, "ALLOWED_EMAILS", set())
+    db = _Session()
+    Base.metadata.create_all(bind=_engine)
+    result = _resolve_me_status("admin@test.com", db)
+    db.close()
+    assert result["status"] == "admin"
+
+
+def test_resolve_me_status_returns_active_for_approved_request(monkeypatch):
+    monkeypatch.setattr(auth_module_alias, "ADMIN_EMAIL", "admin@test.com")
+    monkeypatch.setattr(auth_module_alias, "ALLOWED_EMAILS", set())
+    db = _Session()
+    Base.metadata.create_all(bind=_engine)
+    db.add(AccessRequest(email="user@test.com", status="approved",
+                         requested_at=datetime.now(timezone.utc)))
+    db.commit()
+    result = _resolve_me_status("user@test.com", db)
+    db.close()
+    assert result["status"] == "active"
+
+
+def test_resolve_me_status_returns_pending_for_unknown_email(monkeypatch):
+    monkeypatch.setattr(auth_module_alias, "ADMIN_EMAIL", "admin@test.com")
+    monkeypatch.setattr(auth_module_alias, "ALLOWED_EMAILS", set())
+    db = _Session()
+    Base.metadata.create_all(bind=_engine)
+    result = _resolve_me_status("nobody@test.com", db)
+    db.close()
+    assert result["status"] == "pending"

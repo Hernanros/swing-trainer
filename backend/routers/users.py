@@ -8,6 +8,7 @@ from backend.schemas import (
     UserCreate, UserUpdate, UserResponse,
     VALID_SKILLS, VALID_STAGES, VALID_TIME_BUDGETS,
 )
+from backend.auth import get_current_user
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -58,6 +59,11 @@ def create_user(body: UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(user)
     return _to_response(user)
+
+
+@router.get("/me", response_model=UserResponse)
+def get_me_profile(current_user: User = Depends(get_current_user)):
+    return _to_response(current_user)
 
 
 @router.get("/{user_id}", response_model=UserResponse)
