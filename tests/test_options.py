@@ -163,3 +163,54 @@ def test_open_option_spread_equal_strikes_returns_400():
     body = {**VALID_SPREAD, "option_short_strike": 450.0}
     resp = client.post("/api/trades/", json=body)
     assert resp.status_code == 400
+
+
+def _open_spread(body=None):
+    return client.post("/api/trades/", json=body or VALID_SPREAD).json()
+
+
+def test_close_debit_spread_profit_pnl():
+    t = _open_spread()
+    resp = client.put(f"/api/trades/{t['id']}/close", json={"exit_price": 3.00, "debrief": "good trade"})
+    assert resp.status_code == 200
+    data = resp.json()
+    # pnl = (3.00 - 1.50) * 2 * 100 = 300
+    assert data["pnl"] == 300.0
+    assert data["status"] == "closed"
+
+
+def test_close_debit_spread_loss_pnl():
+    t = _open_spread()
+    resp = client.put(f"/api/trades/{t['id']}/close", json={"exit_price": 0.50, "debrief": "stopped out"})
+    assert resp.status_code == 200
+    data = resp.json()
+    # pnl = (0.50 - 1.50) * 2 * 100 = -200
+    assert data["pnl"] == -200.0
+
+
+def test_close_credit_spread_profit_pnl():
+    body = {
+        **VALID_SPREAD,
+        "option_spread_type":  "bull_put",
+        "option_long_strike":  445.0,
+        "option_short_strike": 450.0,
+        "entry_price":         1.20,
+        "stop_price":          2.40,
+        "target_price":        0.30,
+        "shares":              1,
+    }
+    t = _open_spread(body)
+    # exit at 0.30 (near worthless) = profit for credit spread
+    resp = client.put(f"/api/trades/{t['id']}/close", json={"exit_price": 0.30, "debrief": "expired profitable"})
+    assert resp.status_code == 200
+    data = resp.json()
+    # pnl = (1.20 - 0.30) * 1 * 100 = 90
+    assert data["pnl"] == 90.0
+
+
+def test_close_option_spread_r_multiple():
+    t = _open_spread()
+    resp = client.put(f"/api/trades/{t['id']}/close", json={"exit_price": 3.00, "debrief": "good"})
+    data = resp.json()
+    # pnl=300, max_loss = 1.50*2*100 = 300 → r_multiple = 1.0
+    assert data["r_multiple"] == 1.0

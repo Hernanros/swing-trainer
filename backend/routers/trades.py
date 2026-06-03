@@ -198,12 +198,21 @@ def close_trade(
         raise HTTPException(400, "debrief is required")
 
     exit_price = body.exit_price
-    if trade.direction == "long":
-        pnl = (exit_price - trade.entry) * trade.shares
-        r_multiple = (exit_price - trade.entry) / (trade.entry - trade.stop)
+    if (trade.trade_type or "equity") == "option_spread":
+        is_debit = trade.option_spread_type in DEBIT_SPREADS
+        if is_debit:
+            pnl = (exit_price - trade.entry) * trade.shares * 100
+        else:
+            pnl = (trade.entry - exit_price) * trade.shares * 100
+        metrics    = _compute_option_metrics(trade)
+        r_multiple = round(pnl / metrics["max_loss"], 4) if metrics["max_loss"] else 0.0
     else:
-        pnl = (trade.entry - exit_price) * trade.shares
-        r_multiple = (trade.entry - exit_price) / (trade.stop - trade.entry)
+        if trade.direction == "long":
+            pnl        = (exit_price - trade.entry) * trade.shares
+            r_multiple = (exit_price - trade.entry) / (trade.entry - trade.stop)
+        else:
+            pnl        = (trade.entry - exit_price) * trade.shares
+            r_multiple = (trade.entry - exit_price) / (trade.stop - trade.entry)
 
     trade.exit = exit_price
     trade.debrief = body.debrief
