@@ -1,5 +1,6 @@
 import json
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from typing import List, Union
 from backend.database import get_db
@@ -11,6 +12,10 @@ from backend.schemas import (
 from backend.auth import get_current_user
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+class NameUpdate(BaseModel):
+    name: str
 
 
 def _to_response(user: User) -> dict:
@@ -63,6 +68,20 @@ def create_user(body: UserCreate, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserResponse)
 def get_me_profile(current_user: User = Depends(get_current_user)):
+    return _to_response(current_user)
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_my_name(body: NameUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    name = body.name.strip()
+    if not name:
+        raise HTTPException(400, "Name cannot be empty")
+    duplicate = db.query(User).filter(User.name == name, User.id != current_user.id).first()
+    if duplicate:
+        raise HTTPException(409, "That name is already taken")
+    current_user.name = name
+    db.commit()
+    db.refresh(current_user)
     return _to_response(current_user)
 
 
