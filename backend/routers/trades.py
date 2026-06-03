@@ -19,7 +19,11 @@ SPREAD_TO_DIR  = {"bull_call": "long", "bull_put": "long",
 
 
 def _compute_option_metrics(trade) -> dict:
-    width = abs((trade.option_long_strike or 0) - (trade.option_short_strike or 0))
+    if trade.option_spread_type not in VALID_SPREADS:
+        return {"max_loss": None, "max_profit": None, "breakeven": None}
+    long_s  = trade.option_long_strike  or 0.0
+    short_s = trade.option_short_strike or 0.0
+    width = abs(long_s - short_s)
     entry     = trade.entry
     contracts = trade.shares
     is_debit  = trade.option_spread_type in DEBIT_SPREADS
@@ -27,17 +31,17 @@ def _compute_option_metrics(trade) -> dict:
         max_loss   = round(entry * contracts * 100, 2)
         max_profit = round((width - entry) * contracts * 100, 2)
         breakeven  = (
-            round(trade.option_long_strike + entry, 4)
+            round(long_s + entry, 4)
             if trade.option_spread_type == "bull_call"
-            else round(trade.option_long_strike - entry, 4)
+            else round(long_s - entry, 4)
         )
     else:
         max_loss   = round((width - entry) * contracts * 100, 2)
         max_profit = round(entry * contracts * 100, 2)
         breakeven  = (
-            round(trade.option_short_strike - entry, 4)
+            round(short_s - entry, 4)
             if trade.option_spread_type == "bull_put"
-            else round(trade.option_short_strike + entry, 4)
+            else round(short_s + entry, 4)
         )
     return {"max_loss": max_loss, "max_profit": max_profit, "breakeven": breakeven}
 
