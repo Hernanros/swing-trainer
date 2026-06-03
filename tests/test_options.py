@@ -52,3 +52,67 @@ def test_trade_model_has_option_columns():
         cols = [row[1] for row in conn.execute(text("PRAGMA table_info(trades)"))]
     for col in ["trade_type", "option_expiry", "option_long_strike", "option_short_strike", "option_spread_type"]:
         assert col in cols, f"Missing column: {col}"
+
+
+def test_compute_option_metrics_bull_call():
+    from backend.routers.trades import _compute_option_metrics
+    from backend.models import Trade
+    t = Trade(
+        option_spread_type="bull_call",
+        option_long_strike=450.0,
+        option_short_strike=455.0,
+        entry=1.50,
+        shares=2,
+    )
+    m = _compute_option_metrics(t)
+    assert m["max_loss"]   == 300.0    # 1.50 * 2 * 100
+    assert m["max_profit"] == 700.0    # (5 - 1.50) * 2 * 100
+    assert m["breakeven"]  == 451.50   # 450 + 1.50
+
+
+def test_compute_option_metrics_bear_put():
+    from backend.routers.trades import _compute_option_metrics
+    from backend.models import Trade
+    t = Trade(
+        option_spread_type="bear_put",
+        option_long_strike=450.0,
+        option_short_strike=445.0,
+        entry=2.00,
+        shares=1,
+    )
+    m = _compute_option_metrics(t)
+    assert m["max_loss"]   == 200.0    # 2.00 * 1 * 100
+    assert m["max_profit"] == 300.0    # (5 - 2) * 1 * 100
+    assert m["breakeven"]  == 448.0    # 450 - 2.00
+
+
+def test_compute_option_metrics_bull_put():
+    from backend.routers.trades import _compute_option_metrics
+    from backend.models import Trade
+    t = Trade(
+        option_spread_type="bull_put",
+        option_long_strike=445.0,
+        option_short_strike=450.0,
+        entry=1.20,
+        shares=1,
+    )
+    m = _compute_option_metrics(t)
+    assert m["max_loss"]   == 380.0    # (5 - 1.20) * 1 * 100
+    assert m["max_profit"] == 120.0    # 1.20 * 1 * 100
+    assert m["breakeven"]  == 448.80   # 450 - 1.20
+
+
+def test_compute_option_metrics_bear_call():
+    from backend.routers.trades import _compute_option_metrics
+    from backend.models import Trade
+    t = Trade(
+        option_spread_type="bear_call",
+        option_long_strike=460.0,
+        option_short_strike=455.0,
+        entry=1.20,
+        shares=1,
+    )
+    m = _compute_option_metrics(t)
+    assert m["max_loss"]   == 380.0    # (5 - 1.20) * 1 * 100
+    assert m["max_profit"] == 120.0    # 1.20 * 1 * 100
+    assert m["breakeven"]  == 456.20   # 455 + 1.20

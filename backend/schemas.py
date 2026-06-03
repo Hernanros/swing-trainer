@@ -71,6 +71,11 @@ class TradeCreate(BaseModel):
     practice: bool = False
     checklist_score: Optional[float] = None  # 0.0–100.0
     trade_date: Optional[str] = None         # YYYY-MM-DD; defaults to today if omitted
+    trade_type:          str            = "equity"
+    option_expiry:       Optional[str]  = None
+    option_long_strike:  Optional[float]= None
+    option_short_strike: Optional[float]= None
+    option_spread_type:  Optional[str]  = None
 
     model_config = {"str_strip_whitespace": True}
 
@@ -105,6 +110,14 @@ class TradeResponse(BaseModel):
     ai_debrief: Optional[str]
     created_at: datetime
     trade_date: Optional[str] = None
+    trade_type:          str            = "equity"
+    option_expiry:       Optional[str]  = None
+    option_long_strike:  Optional[float]= None
+    option_short_strike: Optional[float]= None
+    option_spread_type:  Optional[str]  = None
+    max_profit:          Optional[float]= None
+    max_loss:            Optional[float]= None
+    breakeven:           Optional[float]= None
     closed_count: Optional[int] = None
 
 

@@ -12,6 +12,35 @@ from backend.services import claude as claude_service
 router = APIRouter(prefix="/trades", tags=["trades"])
 logger = logging.getLogger(__name__)
 
+DEBIT_SPREADS  = {"bull_call", "bear_put"}
+VALID_SPREADS  = {"bull_call", "bear_put", "bull_put", "bear_call"}
+SPREAD_TO_DIR  = {"bull_call": "long", "bull_put": "long",
+                  "bear_put": "short", "bear_call": "short"}
+
+
+def _compute_option_metrics(trade) -> dict:
+    width = abs((trade.option_long_strike or 0) - (trade.option_short_strike or 0))
+    entry     = trade.entry
+    contracts = trade.shares
+    is_debit  = trade.option_spread_type in DEBIT_SPREADS
+    if is_debit:
+        max_loss   = round(entry * contracts * 100, 2)
+        max_profit = round((width - entry) * contracts * 100, 2)
+        breakeven  = (
+            round(trade.option_long_strike + entry, 4)
+            if trade.option_spread_type == "bull_call"
+            else round(trade.option_long_strike - entry, 4)
+        )
+    else:
+        max_loss   = round((width - entry) * contracts * 100, 2)
+        max_profit = round(entry * contracts * 100, 2)
+        breakeven  = (
+            round(trade.option_short_strike - entry, 4)
+            if trade.option_spread_type == "bull_put"
+            else round(trade.option_short_strike + entry, 4)
+        )
+    return {"max_loss": max_loss, "max_profit": max_profit, "breakeven": breakeven}
+
 
 def _generate_debrief_bg(trade_id: int, rule_detail: Optional[dict] = None) -> None:
     db = SessionLocal()
@@ -29,27 +58,38 @@ def _generate_debrief_bg(trade_id: int, rule_detail: Optional[dict] = None) -> N
 
 
 def _to_response(t: Trade) -> dict:
-    return {
-        "id":              t.id,
-        "symbol":          t.symbol,
-        "direction":       t.direction,
-        "entry_price":     t.entry,
-        "stop_price":      t.stop,
-        "target_price":    t.target,
-        "exit_price":      t.exit,
-        "shares":          t.shares,
-        "status":          t.status,
-        "pre_note":        t.pre_note or "",
-        "debrief":         t.debrief or "",
-        "setup_type":      t.setup_type,
-        "practice":        bool(t.practice),
-        "checklist_score": t.checklist_score,
-        "pnl":             t.pnl,
-        "r_multiple":      t.r_multiple,
-        "ai_debrief":      t.ai_debrief,
-        "created_at":      t.created_at,
-        "trade_date":      t.trade_date,
+    base = {
+        "id":                  t.id,
+        "symbol":              t.symbol,
+        "direction":           t.direction,
+        "entry_price":         t.entry,
+        "stop_price":          t.stop,
+        "target_price":        t.target,
+        "exit_price":          t.exit,
+        "shares":              t.shares,
+        "status":              t.status,
+        "pre_note":            t.pre_note or "",
+        "debrief":             t.debrief or "",
+        "setup_type":          t.setup_type,
+        "practice":            bool(t.practice),
+        "checklist_score":     t.checklist_score,
+        "pnl":                 t.pnl,
+        "r_multiple":          t.r_multiple,
+        "ai_debrief":          t.ai_debrief,
+        "created_at":          t.created_at,
+        "trade_date":          t.trade_date,
+        "trade_type":          t.trade_type or "equity",
+        "option_expiry":       t.option_expiry,
+        "option_long_strike":  t.option_long_strike,
+        "option_short_strike": t.option_short_strike,
+        "option_spread_type":  t.option_spread_type,
+        "max_profit":          None,
+        "max_loss":            None,
+        "breakeven":           None,
     }
+    if (t.trade_type or "equity") == "option_spread" and t.option_spread_type:
+        base.update(_compute_option_metrics(t))
+    return base
 
 
 @router.get("/", response_model=list[TradeResponse])
