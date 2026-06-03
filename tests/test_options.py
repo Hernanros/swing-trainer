@@ -140,6 +140,7 @@ def test_open_option_spread_returns_computed_fields():
     assert data["option_spread_type"] == "bull_call"
     assert data["option_expiry"]      == "2026-07-18"
     assert data["option_long_strike"] == 450.0
+    assert data["option_short_strike"] == 455.0
     assert data["max_loss"]           == 300.0
     assert data["max_profit"]         == 700.0
     assert data["breakeven"]          == 451.50

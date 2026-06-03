@@ -93,7 +93,7 @@ class TradeResponse(BaseModel):
 
     id: int
     symbol: str
-    direction: str
+    direction: Optional[str] = None
     entry_price: float
     stop_price: float
     target_price: float
