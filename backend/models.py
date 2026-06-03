@@ -55,7 +55,7 @@ class Trade(Base):
     r_multiple = Column(Float, nullable=True)
     ai_debrief = Column(Text, nullable=True)
     trade_date            = Column(String, nullable=True)
-    trade_type            = Column(String, nullable=False, default="equity")
+    trade_type            = Column(String, nullable=False, default="equity", server_default="equity")
     option_expiry         = Column(String, nullable=True)
     option_long_strike    = Column(Float,  nullable=True)
     option_short_strike   = Column(Float,  nullable=True)

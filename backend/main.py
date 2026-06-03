@@ -102,16 +102,21 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE ai_patterns ADD COLUMN skill TEXT"))
             conn.commit()
         option_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(trades)"))]
-        for _col, _typedef in [
-            ("trade_type",          "TEXT NOT NULL DEFAULT 'equity'"),
-            ("option_expiry",       "TEXT"),
-            ("option_long_strike",  "REAL"),
-            ("option_short_strike", "REAL"),
-            ("option_spread_type",  "TEXT"),
-        ]:
-            if _col not in option_cols:
-                conn.execute(text(f"ALTER TABLE trades ADD COLUMN {_col} {_typedef}"))
-                conn.commit()
+        if "trade_type" not in option_cols:
+            conn.execute(text("ALTER TABLE trades ADD COLUMN trade_type TEXT NOT NULL DEFAULT 'equity'"))
+            conn.commit()
+        if "option_expiry" not in option_cols:
+            conn.execute(text("ALTER TABLE trades ADD COLUMN option_expiry TEXT"))
+            conn.commit()
+        if "option_long_strike" not in option_cols:
+            conn.execute(text("ALTER TABLE trades ADD COLUMN option_long_strike REAL"))
+            conn.commit()
+        if "option_short_strike" not in option_cols:
+            conn.execute(text("ALTER TABLE trades ADD COLUMN option_short_strike REAL"))
+            conn.commit()
+        if "option_spread_type" not in option_cols:
+            conn.execute(text("ALTER TABLE trades ADD COLUMN option_spread_type TEXT"))
+            conn.commit()
     yield
 
 
