@@ -61,7 +61,7 @@ class UserResponse(BaseModel):
 
 class TradeCreate(BaseModel):
     symbol: str
-    direction: str          # "long" | "short"
+    direction: Optional[str] = None   # "long" | "short" (omitted for option_spread)
     entry_price: float
     stop_price: float
     target_price: float

@@ -119,19 +119,40 @@ def open_trade(
     symbol = body.symbol.upper().strip()
     if not symbol:
         raise HTTPException(400, "symbol is required")
-    if body.direction not in ("long", "short"):
-        raise HTTPException(400, "direction must be 'long' or 'short'")
-    if body.entry_price <= 0 or body.stop_price <= 0 or body.target_price <= 0:
-        raise HTTPException(400, "entry_price, stop_price, and target_price must be > 0")
     if body.shares < 1:
         raise HTTPException(400, "shares must be >= 1")
-    if body.stop_price == body.entry_price:
-        raise HTTPException(400, "stop_price must not equal entry_price")
+    if body.entry_price <= 0:
+        raise HTTPException(400, "entry_price must be > 0")
+    if body.target_price <= 0:
+        raise HTTPException(400, "target_price must be > 0")
+
+    if body.trade_type == "option_spread":
+        if not body.option_spread_type or body.option_spread_type not in VALID_SPREADS:
+            raise HTTPException(400, f"option_spread_type must be one of: {sorted(VALID_SPREADS)}")
+        if not body.option_expiry:
+            raise HTTPException(400, "option_expiry is required for option spreads (YYYY-MM-DD)")
+        if body.option_long_strike is None or body.option_long_strike <= 0:
+            raise HTTPException(400, "option_long_strike must be > 0")
+        if body.option_short_strike is None or body.option_short_strike <= 0:
+            raise HTTPException(400, "option_short_strike must be > 0")
+        if body.option_long_strike == body.option_short_strike:
+            raise HTTPException(400, "option_long_strike and option_short_strike must differ")
+        if body.stop_price < 0:
+            raise HTTPException(400, "stop_price must be >= 0")
+        direction = SPREAD_TO_DIR[body.option_spread_type]
+    else:
+        if body.direction not in ("long", "short"):
+            raise HTTPException(400, "direction must be 'long' or 'short'")
+        if body.stop_price <= 0:
+            raise HTTPException(400, "stop_price must be > 0")
+        if body.stop_price == body.entry_price:
+            raise HTTPException(400, "stop_price must not equal entry_price")
+        direction = body.direction
 
     trade = Trade(
         user_id=current_user.id,
         symbol=symbol,
-        direction=body.direction,
+        direction=direction,
         entry=body.entry_price,
         stop=body.stop_price,
         target=body.target_price,
@@ -143,6 +164,11 @@ def open_trade(
         setup_type=body.setup_type or None,
         practice=body.practice,
         checklist_score=body.checklist_score,
+        trade_type=body.trade_type,
+        option_expiry=body.option_expiry,
+        option_long_strike=body.option_long_strike,
+        option_short_strike=body.option_short_strike,
+        option_spread_type=body.option_spread_type,
     )
     db.add(trade)
     db.commit()

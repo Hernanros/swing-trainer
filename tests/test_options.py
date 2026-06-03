@@ -116,3 +116,49 @@ def test_compute_option_metrics_bear_call():
     assert m["max_loss"]   == 380.0    # (5 - 1.20) * 1 * 100
     assert m["max_profit"] == 120.0    # 1.20 * 1 * 100
     assert m["breakeven"]  == 456.20   # 455 + 1.20
+
+
+VALID_SPREAD = {
+    "symbol":               "SPY",
+    "trade_type":           "option_spread",
+    "option_spread_type":   "bull_call",
+    "option_expiry":        "2026-07-18",
+    "option_long_strike":   450.0,
+    "option_short_strike":  455.0,
+    "entry_price":          1.50,
+    "stop_price":           0.75,
+    "target_price":         3.00,
+    "shares":               2,
+}
+
+
+def test_open_option_spread_returns_computed_fields():
+    resp = client.post("/api/trades/", json=VALID_SPREAD)
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["trade_type"]         == "option_spread"
+    assert data["option_spread_type"] == "bull_call"
+    assert data["option_expiry"]      == "2026-07-18"
+    assert data["option_long_strike"] == 450.0
+    assert data["max_loss"]           == 300.0
+    assert data["max_profit"]         == 700.0
+    assert data["breakeven"]          == 451.50
+    assert data["direction"]          == "long"
+
+
+def test_open_option_spread_missing_expiry_returns_400():
+    body = {**VALID_SPREAD, "option_expiry": None}
+    resp = client.post("/api/trades/", json=body)
+    assert resp.status_code == 400
+
+
+def test_open_option_spread_missing_spread_type_returns_400():
+    body = {**VALID_SPREAD, "option_spread_type": None}
+    resp = client.post("/api/trades/", json=body)
+    assert resp.status_code == 400
+
+
+def test_open_option_spread_equal_strikes_returns_400():
+    body = {**VALID_SPREAD, "option_short_strike": 450.0}
+    resp = client.post("/api/trades/", json=body)
+    assert resp.status_code == 400
