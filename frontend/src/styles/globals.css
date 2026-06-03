@@ -17,6 +17,22 @@
   --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
+[data-theme="light"] {
+  --bg: #ffffff;
+  --surface: #f6f8fa;
+  --surface2: #eaeef2;
+  --border: #d0d7de;
+  --border2: #c9d1d9;
+  --text: #1f2328;
+  --text2: #454e56;
+  --muted: #636c76;
+  --dim: #8c959f;
+  --accent: #0969da;
+  --green: #1a7f37;
+  --yellow: #9a6700;
+  --red: #d1242f;
+}
+
 body { background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; }
 
 /* App shell */

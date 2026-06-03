@@ -61,6 +61,10 @@ export default function BottomNav() {
               )}
             </button>
           ))}
+          <button className="bottom-nav-more-item" onClick={() => goTo('/account')}>
+            <span>⚙️</span>
+            <span>Account</span>
+          </button>
           {status === "admin" && (
             <button className="bottom-nav-more-item" onClick={() => goTo('/admin')}>
               <span>🛡️</span>

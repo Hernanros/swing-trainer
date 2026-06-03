@@ -16,9 +16,15 @@ import Progress from './pages/Progress'
 import Tips from './pages/Tips'
 import Curriculum from './pages/Curriculum'
 import Admin from './pages/Admin'
+import Account from './pages/Account'
 
 function AppShell() {
   const { user, status, loading } = useUser()
+
+  React.useEffect(() => {
+    const saved = localStorage.getItem("theme") || "dark";
+    document.documentElement.setAttribute("data-theme", saved === "light" ? "light" : "dark");
+  }, []);
 
   if (loading)                  return <div className="loading">Loading…</div>
   if (status === null)          return <Login />
@@ -40,6 +46,7 @@ function AppShell() {
           <Route path="/tips"       element={<Tips />} />
           <Route path="/curriculum" element={<Curriculum />} />
           <Route path="/admin"      element={status === "admin" ? <Admin /> : <Navigate to="/" replace />} />
+          <Route path="/account"   element={<Account />} />
           <Route path="*"          element={<Navigate to="/" replace />} />
         </Routes>
       </main>

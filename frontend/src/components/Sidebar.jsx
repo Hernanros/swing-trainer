@@ -70,6 +70,10 @@ export default function Sidebar() {
           Admin
         </NavLink>
       )}
+      <NavLink to="/account" className={({ isActive }) => `nav-item${isActive ? ' active' : ''}`}>
+        <span className="nav-icon">⚙️</span>
+        Account
+      </NavLink>
     </nav>
   )
 }
