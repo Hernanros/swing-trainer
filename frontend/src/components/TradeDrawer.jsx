@@ -47,7 +47,7 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
     const entry    = +form.entry_price
     const contracts= +form.shares
     const st       = form.option_spread_type
-    if (!ls || !entry || !contracts || !st) return null
+    if (!form.option_long_strike || !form.option_short_strike || !ls || !entry || !contracts || !st) return null
     const isDebit = ['bull_call', 'bear_put'].includes(st)
     let maxLoss, maxProfit, breakeven
     if (isDebit) {
@@ -151,7 +151,7 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
         if (!form.option_short_strike || +form.option_short_strike <= 0) errs.option_short_strike = 'Must be > 0'
         if (+form.option_long_strike === +form.option_short_strike) errs.option_short_strike = 'Must differ from long strike'
         if (!form.entry_price || +form.entry_price <= 0) errs.entry_price = 'Must be > 0'
-        if (+form.stop_price < 0)  errs.stop_price   = 'Must be >= 0'
+        if (form.stop_price === '' || +form.stop_price < 0)  errs.stop_price   = 'Required (enter 0 if no stop)'
         if (!form.target_price || +form.target_price <= 0) errs.target_price = 'Must be > 0'
         if (!form.shares || +form.shares < 1) errs.shares = 'Must be >= 1'
       } else {
@@ -178,7 +178,7 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
       const data = mode === 'open'
         ? {
             symbol:          form.symbol.trim(),
-            direction:       form.direction,
+            ...(form.trade_type === 'equity' && { direction: form.direction }),
             entry_price:     +form.entry_price,
             stop_price:      +form.stop_price,
             target_price:    +form.target_price,
@@ -540,7 +540,7 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
             <div style={{ background: 'var(--surface2)', borderRadius: 6, padding: '10px 12px', fontSize: 12, color: 'var(--muted)' }}>
               {(trade?.trade_type || 'equity') === 'option_spread' ? (
                 <>
-                  <div>{trade?.option_spread_type?.replace('_', ' ').toUpperCase()} · {trade?.option_long_strike} / {trade?.option_short_strike} strike · {trade?.shares} contracts</div>
+                  <div>{trade?.option_spread_type?.replace(/_/g, ' ').toUpperCase()} · {trade?.option_long_strike} / {trade?.option_short_strike} strike · {trade?.shares} contracts</div>
                   <div>Entry ${trade?.entry_price} · Exp: {trade?.option_expiry}</div>
                 </>
               ) : (
