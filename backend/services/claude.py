@@ -79,6 +79,9 @@ def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_c
     followed_str = ", ".join(rule_detail["followed"]) if rule_detail and rule_detail.get("followed") else "none recorded"
     violated_str = ", ".join(rule_detail["violated"]) if rule_detail and rule_detail.get("violated") else "none recorded"
 
+    pnl_str = f"${trade.pnl:.2f}" if trade.pnl is not None else "N/A"
+    r_str   = f"{trade.r_multiple:.2f}R" if trade.r_multiple is not None else "?R"
+
     if (trade.trade_type or "equity") == "option_spread":
         long_s   = trade.option_long_strike  or 0.0
         short_s  = trade.option_short_strike or 0.0
@@ -98,7 +101,7 @@ def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_c
             f"({'debit' if is_debit else 'credit'}) | Bias: {bias_label}\n"
             f"- Strikes: {trade.option_long_strike}/{trade.option_short_strike} | Expiry: {trade.option_expiry}\n"
             f"- Premium {premium_label}: ${trade.entry} | Exit premium: ${trade.exit} | Contracts: {trade.shares}\n"
-            f"- P&L: ${trade.pnl:.2f} ({trade.r_multiple:.2f}R vs max risk)\n"
+            f"- P&L: {pnl_str} ({r_str} vs max risk)\n"
             f"- Max risk: ${max_loss} | Max profit: ${max_profit}\n"
             f"- Setup type: {trade.setup_type or 'Not specified'}\n"
             f"- Plan adherence score: {f'{trade.checklist_score:.0f}%' if trade.checklist_score is not None else 'N/A'}\n"
@@ -117,7 +120,7 @@ def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_c
         trade_block = (
             f"- Symbol: {trade.symbol} | Direction: {trade.direction}\n"
             f"- Entry: ${trade.entry} | Stop: ${trade.stop} | Target: ${trade.target} | Exit: ${trade.exit}\n"
-            f"- Shares: {trade.shares} | P&L: ${trade.pnl:.2f} ({trade.r_multiple:.2f}R)\n"
+            f"- Shares: {trade.shares} | P&L: {pnl_str} ({r_str})\n"
             f"- Setup type: {trade.setup_type or 'Not specified'}\n"
             f"- Plan adherence score: {f'{trade.checklist_score:.0f}%' if trade.checklist_score is not None else 'N/A'}\n"
             f"- Rules followed: {followed_str}\n"
