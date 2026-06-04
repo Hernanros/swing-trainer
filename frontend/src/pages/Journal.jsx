@@ -206,8 +206,8 @@ export default function Journal() {
                             <span><span style={{ color: 'var(--muted)' }}>Spread: </span>{SPREAD_LABELS[t.option_spread_type]}</span>
                             <span><span style={{ color: 'var(--muted)' }}>Strikes: </span>{t.option_long_strike} / {t.option_short_strike}</span>
                             <span><span style={{ color: 'var(--muted)' }}>Expiry: </span>{fmtExpiry(t.option_expiry)}</span>
-                            {t.max_loss    != null && <span><span style={{ color: 'var(--muted)' }}>Max Risk: </span><span style={{ color: 'var(--red)', fontFamily: 'monospace' }}>${t.max_loss}</span></span>}
-                            {t.max_profit  != null && <span><span style={{ color: 'var(--muted)' }}>Max Profit: </span><span style={{ color: 'var(--green)', fontFamily: 'monospace' }}>${t.max_profit}</span></span>}
+                            {t.max_loss    != null && <span><span style={{ color: 'var(--muted)' }}>Max Risk: </span><span style={{ color: 'var(--red)', fontFamily: 'monospace' }}>${fmt(t.max_loss)}</span></span>}
+                            {t.max_profit  != null && <span><span style={{ color: 'var(--muted)' }}>Max Profit: </span><span style={{ color: 'var(--green)', fontFamily: 'monospace' }}>${fmt(t.max_profit)}</span></span>}
                             {t.breakeven   != null && <span><span style={{ color: 'var(--muted)' }}>Breakeven: </span><span style={{ fontFamily: 'monospace' }}>{t.breakeven}</span></span>}
                           </div>
                         )}
