@@ -58,6 +58,7 @@ export default function Home() {
   const [skills, setSkills]     = useState([])
   const [today, setToday]       = useState(null)
   const [patterns, setPatterns] = useState([])
+  const [earningsMap, setEarningsMap] = useState({})
 
   useEffect(() => {
     api.trades.list().then(setTrades).catch(() => {})
@@ -67,6 +68,27 @@ export default function Home() {
       .then(pd => setPatterns(pd.patterns || []))
       .catch(err => console.error('Failed to load patterns:', err))
   }, [user.id])
+
+  useEffect(() => {
+    const open = trades.filter(t => t.status === 'open')
+    if (open.length === 0) return
+    const symbols = [...new Set(open.map(t => t.symbol))]
+    const now = new Date()
+    now.setHours(0, 0, 0, 0)
+    const cutoff = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+    Promise.allSettled(
+      symbols.map(sym => api.market.earnings(sym).then(data => ({ sym, date: data.date })))
+    ).then(results => {
+      const map = {}
+      results.forEach(r => {
+        if (r.status !== 'fulfilled') return
+        const { sym, date } = r.value
+        const d = new Date(date + 'T00:00:00')
+        if (d >= now && d <= cutoff) map[sym] = date
+      })
+      setEarningsMap(map)
+    })
+  }, [trades])
 
   const openTrades = trades.filter(t => t.status === 'open')
 
@@ -219,6 +241,11 @@ export default function Home() {
                     <span style={{ fontWeight: 400, color: t.direction === 'long' ? 'var(--green)' : 'var(--red)', fontSize: 11, textTransform: 'uppercase' }}>
                       {t.direction}
                     </span>
+                    {earningsMap[t.symbol] && (
+                      <span style={{ marginLeft: 6, color: 'var(--yellow)', fontSize: 10, fontWeight: 700 }}>
+                        {'EARNINGS ' + new Date(earningsMap[t.symbol] + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                      </span>
+                    )}
                   </div>
                   <div style={{ color: 'var(--muted)', fontSize: 11, fontFamily: 'monospace', marginTop: 2 }}>
                     Entry ${t.entry_price.toFixed(2)} · {t.shares} shares · Stop ${t.stop_price.toFixed(2)}
