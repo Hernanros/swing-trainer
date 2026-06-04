@@ -21,6 +21,19 @@ function fmtPnl(n) {
   return `${n >= 0 ? '+' : ''}$${n.toFixed(2)}`
 }
 
+const SPREAD_LABELS = {
+  bull_call: 'Bull Call',
+  bear_put:  'Bear Put',
+  bull_put:  'Bull Put',
+  bear_call: 'Bear Call',
+}
+
+function fmtExpiry(str) {
+  if (!str) return ''
+  const d = new Date(str + 'T00:00:00')
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 export default function Journal() {
   const [trades, setTrades]   = useState([])
   const [loading, setLoading] = useState(true)
@@ -113,7 +126,19 @@ export default function Journal() {
                     <td style={{ padding: '9px 10px', color: 'var(--muted)' }}>
                       {new Date(t.trade_date || t.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </td>
-                    <td style={{ padding: '9px 10px', fontWeight: 600, color: 'var(--text)' }}>{t.symbol}</td>
+                    <td style={{ padding: '9px 10px', fontWeight: 600, color: 'var(--text)' }}>
+                      {t.symbol}
+                      {t.trade_type === 'option_spread' && t.option_spread_type && (
+                        <div style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 500, marginTop: 2 }}>
+                          {SPREAD_LABELS[t.option_spread_type]}
+                          {t.option_long_strike && t.option_short_strike && (
+                            <span style={{ color: 'var(--muted)', marginLeft: 4 }}>
+                              {t.option_long_strike}/{t.option_short_strike} · {fmtExpiry(t.option_expiry)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </td>
                     <td style={{ padding: '9px 10px', color: t.direction === 'long' ? 'var(--green)' : 'var(--red)', textTransform: 'uppercase', fontSize: 11, fontWeight: 600 }}>
                       {t.direction}
                     </td>
@@ -174,6 +199,16 @@ export default function Journal() {
                                 : 'var(--red)',
                           }}>
                             Checklist: {t.checklist_score.toFixed(0)}%
+                          </div>
+                        )}
+                        {t.trade_type === 'option_spread' && t.option_spread_type && (
+                          <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 8, display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                            <span><span style={{ color: 'var(--muted)' }}>Spread: </span>{SPREAD_LABELS[t.option_spread_type]}</span>
+                            <span><span style={{ color: 'var(--muted)' }}>Strikes: </span>{t.option_long_strike} / {t.option_short_strike}</span>
+                            <span><span style={{ color: 'var(--muted)' }}>Expiry: </span>{fmtExpiry(t.option_expiry)}</span>
+                            {t.max_loss    != null && <span><span style={{ color: 'var(--muted)' }}>Max Risk: </span><span style={{ color: 'var(--red)', fontFamily: 'monospace' }}>${t.max_loss}</span></span>}
+                            {t.max_profit  != null && <span><span style={{ color: 'var(--muted)' }}>Max Profit: </span><span style={{ color: 'var(--green)', fontFamily: 'monospace' }}>${t.max_profit}</span></span>}
+                            {t.breakeven   != null && <span><span style={{ color: 'var(--muted)' }}>Breakeven: </span><span style={{ fontFamily: 'monospace' }}>{t.breakeven}</span></span>}
                           </div>
                         )}
                       </td>
