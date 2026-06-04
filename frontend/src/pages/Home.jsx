@@ -73,7 +73,7 @@ export default function Home() {
   const { monday, sunday } = getWeekBounds()
   const weekClosed = trades.filter(t => {
     if (t.status !== 'closed') return false
-    const d = new Date(t.created_at)
+    const d = new Date((t.trade_date || t.created_at.split('T')[0]) + 'T00:00:00')
     return d >= monday && d <= sunday
   })
   const weekWins  = weekClosed.filter(t => t.pnl >= 0).length
