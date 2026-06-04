@@ -70,8 +70,12 @@ export default function Home() {
   }, [user.id])
 
   useEffect(() => {
+    let cancelled = false
     const open = trades.filter(t => t.status === 'open')
-    if (open.length === 0) return
+    if (open.length === 0) {
+      setEarningsMap({})
+      return () => { cancelled = true }
+    }
     const symbols = [...new Set(open.map(t => t.symbol))]
     const now = new Date()
     now.setHours(0, 0, 0, 0)
@@ -79,6 +83,7 @@ export default function Home() {
     Promise.allSettled(
       symbols.map(sym => api.market.earnings(sym).then(data => ({ sym, date: data.date })))
     ).then(results => {
+      if (cancelled) return
       const map = {}
       results.forEach(r => {
         if (r.status !== 'fulfilled') return
@@ -88,6 +93,7 @@ export default function Home() {
       })
       setEarningsMap(map)
     })
+    return () => { cancelled = true }
   }, [trades])
 
   const openTrades = trades.filter(t => t.status === 'open')
