@@ -13,6 +13,14 @@ _SKILL_LABELS = {
     "risk_sizing":        "Risk Sizing",
 }
 
+_DEBIT_SPREADS = {"bull_call", "bear_put"}
+_SPREAD_LABELS = {
+    "bull_call": "Bull Call",
+    "bear_put":  "Bear Put",
+    "bull_put":  "Bull Put",
+    "bear_call": "Bear Call",
+}
+
 
 def get_user_coaching_context(user, db) -> str:
     from backend.models import SkillScore, Trade
@@ -62,7 +70,7 @@ def call_claude(prompt: str, max_tokens: int = 1000) -> str:
     return message.content[0].text
 
 
-def generate_trade_debrief(trade, rule_detail: Optional[dict] = None) -> str:
+def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_context: str = "") -> str:
     if not _api_key:
         return "[AI debrief unavailable — set ANTHROPIC_API_KEY to enable]"
     from anthropic import Anthropic
@@ -71,25 +79,67 @@ def generate_trade_debrief(trade, rule_detail: Optional[dict] = None) -> str:
     followed_str = ", ".join(rule_detail["followed"]) if rule_detail and rule_detail.get("followed") else "none recorded"
     violated_str = ", ".join(rule_detail["violated"]) if rule_detail and rule_detail.get("violated") else "none recorded"
 
-    prompt = f"""You are a professional swing trading coach. Analyze this trade and write a concise debrief.
+    if (trade.trade_type or "equity") == "option_spread":
+        long_s   = trade.option_long_strike  or 0.0
+        short_s  = trade.option_short_strike or 0.0
+        width    = abs(long_s - short_s)
+        is_debit = trade.option_spread_type in _DEBIT_SPREADS
+        if is_debit:
+            max_loss   = round(trade.entry * trade.shares * 100, 2)
+            max_profit = round((width - trade.entry) * trade.shares * 100, 2)
+        else:
+            max_loss   = round((width - trade.entry) * trade.shares * 100, 2)
+            max_profit = round(trade.entry * trade.shares * 100, 2)
+        spread_label  = _SPREAD_LABELS.get(trade.option_spread_type, trade.option_spread_type)
+        bias_label    = "Bullish" if trade.option_spread_type in ("bull_call", "bull_put") else "Bearish"
+        premium_label = "paid" if is_debit else "received"
+        trade_block = (
+            f"- Symbol: {trade.symbol} | Spread: {spread_label} "
+            f"({'debit' if is_debit else 'credit'}) | Bias: {bias_label}\n"
+            f"- Strikes: {trade.option_long_strike}/{trade.option_short_strike} | Expiry: {trade.option_expiry}\n"
+            f"- Premium {premium_label}: ${trade.entry} | Exit premium: ${trade.exit} | Contracts: {trade.shares}\n"
+            f"- P&L: ${trade.pnl:.2f} ({trade.r_multiple:.2f}R vs max risk)\n"
+            f"- Max risk: ${max_loss} | Max profit: ${max_profit}\n"
+            f"- Setup type: {trade.setup_type or 'Not specified'}\n"
+            f"- Plan adherence score: {f'{trade.checklist_score:.0f}%' if trade.checklist_score is not None else 'N/A'}\n"
+            f"- Rules followed: {followed_str}\n"
+            f"- Rules violated: {violated_str}\n"
+            f"- Pre-trade note: {trade.pre_note or 'None'}"
+        )
+        paragraphs = (
+            "Write exactly 4 short paragraphs:\n"
+            "1. Plan adherence — did the spread selection and setup match the pre-trade note and checklist?\n"
+            "2. Spread structure — were the strikes, expiry, and premium appropriate for the thesis?\n"
+            "3. Risk management — was position size appropriate relative to max risk, and was the trade managed well?\n"
+            "4. Key lesson — one specific, actionable observation from this trade."
+        )
+    else:
+        trade_block = (
+            f"- Symbol: {trade.symbol} | Direction: {trade.direction}\n"
+            f"- Entry: ${trade.entry} | Stop: ${trade.stop} | Target: ${trade.target} | Exit: ${trade.exit}\n"
+            f"- Shares: {trade.shares} | P&L: ${trade.pnl:.2f} ({trade.r_multiple:.2f}R)\n"
+            f"- Setup type: {trade.setup_type or 'Not specified'}\n"
+            f"- Plan adherence score: {f'{trade.checklist_score:.0f}%' if trade.checklist_score is not None else 'N/A'}\n"
+            f"- Rules followed: {followed_str}\n"
+            f"- Rules violated: {violated_str}\n"
+            f"- Pre-trade note: {trade.pre_note or 'None'}"
+        )
+        paragraphs = (
+            "Write exactly 4 short paragraphs:\n"
+            "1. Plan adherence — did the trade match the pre-trade note and checklist?\n"
+            "2. Entry quality — was entry precise and well-timed?\n"
+            "3. Risk management — was the stop structural, sized correctly, and honoured?\n"
+            "4. Key lesson — one specific, actionable observation from this trade."
+        )
 
-Trade:
-- Symbol: {trade.symbol} | Direction: {trade.direction}
-- Entry: ${trade.entry} | Stop: ${trade.stop} | Target: ${trade.target} | Exit: ${trade.exit}
-- Shares: {trade.shares} | P&L: ${trade.pnl:.2f} ({trade.r_multiple:.2f}R)
-- Setup type: {trade.setup_type or 'Not specified'}
-- Plan adherence score: {f"{trade.checklist_score:.0f}%" if trade.checklist_score is not None else "N/A"}
-- Rules followed: {followed_str}
-- Rules violated: {violated_str}
-- Pre-trade note: {trade.pre_note or 'None'}
-
-Write exactly 4 short paragraphs:
-1. Plan adherence — did the trade match the pre-trade note and checklist?
-2. Entry quality — was entry precise and well-timed?
-3. Risk management — was the stop structural, sized correctly, and honoured?
-4. Key lesson — one specific, actionable observation from this trade.
-
-Be direct and specific. No generic advice."""
+    context_block = f"\nStudent context:\n{coaching_context}\n" if coaching_context else ""
+    prompt = (
+        f"You are a professional swing trading coach. Analyze this trade and write a concise debrief."
+        f"{context_block}\n"
+        f"Trade:\n{trade_block}\n\n"
+        f"{paragraphs}\n\n"
+        f"Be direct and specific. No generic advice."
+    )
 
     message = client.messages.create(
         model="claude-sonnet-4-6",

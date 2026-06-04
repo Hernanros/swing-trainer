@@ -95,3 +95,53 @@ def test_context_handles_null_r_multiple(db, user):
     ctx = get_user_coaching_context(user, db)
     assert "MSFT" in ctx
     assert "?R" in ctx
+
+
+def test_debrief_returns_unavailable_when_no_api_key(db, user):
+    from backend.models import Trade
+    trade = Trade(
+        user_id=user.id, symbol="AAPL", direction="long",
+        entry=150.0, stop=145.0, target=165.0, exit=162.0,
+        shares=10, status="closed", date="2026-06-01",
+        pnl=120.0, r_multiple=2.4, trade_type="equity",
+    )
+    db.add(trade)
+    db.commit()
+    from backend.services import claude as svc
+    result = svc.generate_trade_debrief(trade)
+    assert "unavailable" in result.lower()
+
+
+def test_debrief_accepts_coaching_context_param(db, user):
+    from backend.models import Trade
+    trade = Trade(
+        user_id=user.id, symbol="AAPL", direction="long",
+        entry=150.0, stop=145.0, target=165.0, exit=162.0,
+        shares=10, status="closed", date="2026-06-01",
+        pnl=120.0, r_multiple=2.4, trade_type="equity",
+    )
+    db.add(trade)
+    db.commit()
+    from backend.services import claude as svc
+    # Must accept the new parameter without error
+    result = svc.generate_trade_debrief(trade, coaching_context="User: Alice | Stage: active")
+    assert "unavailable" in result.lower()
+
+
+def test_debrief_accepts_option_spread_trade(db, user):
+    from backend.models import Trade
+    trade = Trade(
+        user_id=user.id, symbol="SPY", direction="long",
+        trade_type="option_spread", option_spread_type="bull_call",
+        option_long_strike=450.0, option_short_strike=455.0,
+        option_expiry="2026-07-18",
+        entry=1.50, stop=0.75, target=3.00, exit=3.00,
+        shares=2, status="closed", date="2026-06-01",
+        pnl=300.0, r_multiple=1.0,
+    )
+    db.add(trade)
+    db.commit()
+    from backend.services import claude as svc
+    # Must not crash when trade_type is option_spread (no API key, so returns unavailable)
+    result = svc.generate_trade_debrief(trade)
+    assert "unavailable" in result.lower()

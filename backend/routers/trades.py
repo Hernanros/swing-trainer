@@ -52,7 +52,9 @@ def _generate_debrief_bg(trade_id: int, rule_detail: Optional[dict] = None) -> N
         trade = db.query(Trade).filter(Trade.id == trade_id).first()
         if not trade or trade.status != "closed" or trade.ai_debrief:
             return
-        trade.ai_debrief = claude_service.generate_trade_debrief(trade, rule_detail)
+        user = db.query(User).filter(User.id == trade.user_id).first()
+        coaching_context = claude_service.get_user_coaching_context(user, db) if user else ""
+        trade.ai_debrief = claude_service.generate_trade_debrief(trade, rule_detail, coaching_context)
         db.commit()
     except Exception:
         db.rollback()
@@ -199,6 +201,8 @@ def close_trade(
 
     exit_price = body.exit_price
     if (trade.trade_type or "equity") == "option_spread":
+        if trade.option_spread_type not in VALID_SPREADS:
+            raise HTTPException(400, "Unknown option_spread_type; cannot close")
         is_debit = trade.option_spread_type in DEBIT_SPREADS
         if is_debit:
             pnl = (exit_price - trade.entry) * trade.shares * 100
@@ -208,11 +212,13 @@ def close_trade(
         r_multiple = round(pnl / metrics["max_loss"], 4) if metrics["max_loss"] else 0.0
     else:
         if trade.direction == "long":
-            pnl        = (exit_price - trade.entry) * trade.shares
-            r_multiple = (exit_price - trade.entry) / (trade.entry - trade.stop)
+            pnl  = (exit_price - trade.entry) * trade.shares
+            risk = trade.entry - trade.stop
+            r_multiple = ((exit_price - trade.entry) / risk) if risk else 0.0
         else:
-            pnl        = (trade.entry - exit_price) * trade.shares
-            r_multiple = (trade.entry - exit_price) / (trade.stop - trade.entry)
+            pnl  = (trade.entry - exit_price) * trade.shares
+            risk = trade.stop - trade.entry
+            r_multiple = ((trade.entry - exit_price) / risk) if risk else 0.0
 
     trade.exit = exit_price
     trade.debrief = body.debrief
@@ -273,7 +279,8 @@ def generate_ai_debrief(
         raise HTTPException(404, "Trade not found")
     if trade.status != "closed":
         raise HTTPException(400, "Trade must be closed before generating a debrief")
-    trade.ai_debrief = claude_service.generate_trade_debrief(trade)
+    coaching_context = claude_service.get_user_coaching_context(current_user, db)
+    trade.ai_debrief = claude_service.generate_trade_debrief(trade, coaching_context=coaching_context)
     db.commit()
     db.refresh(trade)
     return _to_response(trade)
