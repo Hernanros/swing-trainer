@@ -78,3 +78,41 @@ def test_parse_generated_questions_rejects_out_of_range_correct():
     ])
     result = parse_generated_questions(raw, source="test")
     assert result == []
+
+
+from scripts.validate_question_bank import build_validation_prompt, parse_validation_result
+
+
+def test_build_validation_prompt_contains_question_text():
+    q = {
+        "q": "What is RSI?",
+        "options": ["A momentum indicator", "A volume indicator", "A trend indicator", "A volatility indicator"],
+        "correct": 0,
+        "explanation": "RSI is a momentum oscillator.",
+        "source": "Murphy - Technical Analysis",
+    }
+    prompt = build_validation_prompt(q)
+    assert "What is RSI?" in prompt
+    assert "A momentum indicator" in prompt
+    assert "Murphy" in prompt
+    assert "index 0" in prompt
+
+
+def test_parse_validation_result_ok():
+    raw = '{"verdict": "OK", "issue": null}'
+    result = parse_validation_result(raw)
+    assert result["verdict"] == "OK"
+    assert result["issue"] is None
+
+
+def test_parse_validation_result_error():
+    raw = '{"verdict": "ERROR", "issue": "The marked answer is factually incorrect."}'
+    result = parse_validation_result(raw)
+    assert result["verdict"] == "ERROR"
+    assert "incorrect" in result["issue"]
+
+
+def test_parse_validation_result_handles_invalid_json():
+    result = parse_validation_result("not json at all")
+    assert result["verdict"] == "WARN"
+    assert result["issue"] is not None
