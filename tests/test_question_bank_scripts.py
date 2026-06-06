@@ -116,3 +116,10 @@ def test_parse_validation_result_handles_invalid_json():
     result = parse_validation_result("not json at all")
     assert result["verdict"] == "WARN"
     assert result["issue"] is not None
+
+
+def test_new_skills_in_valid_skills():
+    from backend.schemas import VALID_SKILLS, VALID_DRILL_KEYS
+    for skill in ["technical_indicators", "market_internals", "short_selling", "gap_trading"]:
+        assert skill in VALID_SKILLS, f"{skill} missing from VALID_SKILLS"
+        assert skill in VALID_DRILL_KEYS, f"{skill} missing from VALID_DRILL_KEYS"

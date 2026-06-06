@@ -10,6 +10,6 @@ def test_user_create_strips_whitespace():
     assert u.name == "Hernan"
 
 def test_valid_skills_list_is_complete():
-    assert len(VALID_SKILLS) == 6
+    assert len(VALID_SKILLS) == 10
     assert "emotional_discipline" in VALID_SKILLS
     assert "trade_management" in VALID_SKILLS

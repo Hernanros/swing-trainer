@@ -10,6 +10,10 @@ VALID_SKILLS = [
     "setup_selection",
     "trade_management",
     "emotional_discipline",
+    "technical_indicators",
+    "market_internals",
+    "short_selling",
+    "gap_trading",
 ]
 
 VALID_DRILL_KEYS = [
@@ -21,6 +25,10 @@ VALID_DRILL_KEYS = [
     "chart_patterns",
     "support_resistance",
     "channels",
+    "technical_indicators",
+    "market_internals",
+    "short_selling",
+    "gap_trading",
 ]
 
 VALID_STAGES = ["learning", "small_money", "active"]
