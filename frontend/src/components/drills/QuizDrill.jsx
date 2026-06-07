@@ -17,11 +17,11 @@ function selectQuestions(bank, masteryRecords) {
     if (state === 'learning') learning.push(item)
     else newQ.push(item)
   })
-  // Always surface at least 2 new questions so the expanded bank gets seen.
-  // Fill remaining slots with learning questions, then more new ones.
-  const newSlots = Math.min(2, newQ.length)
+  // Prioritise new questions (4 slots) while keeping 1 review question in rotation.
+  // Once new questions are exhausted, fall back to learning-only.
+  const newSlots = Math.min(4, newQ.length)
   const learningSlots = Math.min(5 - newSlots, learning.length)
-  return [...learning.slice(0, learningSlots), ...newQ.slice(0, 5 - learningSlots)]
+  return [...newQ.slice(0, newSlots), ...learning.slice(0, 5 - newSlots)]
 }
 
 export default function QuizDrill({ skill, drillKey, drillType, onComplete, questions: questionsProp }) {
