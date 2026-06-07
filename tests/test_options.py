@@ -166,7 +166,9 @@ def test_open_option_spread_equal_strikes_returns_400():
 
 
 def _open_spread(body=None):
-    return client.post("/api/trades/", json=body or VALID_SPREAD).json()
+    resp = client.post("/api/trades/", json=body or VALID_SPREAD)
+    assert resp.status_code == 201, f"open_spread failed: {resp.json()}"
+    return resp.json()
 
 
 def test_close_debit_spread_profit_pnl():
@@ -211,6 +213,7 @@ def test_close_credit_spread_profit_pnl():
 def test_close_option_spread_r_multiple():
     t = _open_spread()
     resp = client.put(f"/api/trades/{t['id']}/close", json={"exit_price": 3.00, "debrief": "good"})
+    assert resp.status_code == 200
     data = resp.json()
     # pnl=300, max_loss = 1.50*2*100 = 300 → r_multiple = 1.0
     assert data["r_multiple"] == 1.0
