@@ -67,10 +67,20 @@ Return ONLY a JSON array — no markdown, no explanation:
 Vary which index is correct across your {questions_per_subtopic} questions."""
 
 
+def _strip_markdown_fence(text: str) -> str:
+    """Remove ```json ... ``` or ``` ... ``` wrappers if present."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+    return text.strip()
+
+
 def parse_generated_questions(raw_text: str, source: str) -> list:
     """Parse Claude's JSON response. Returns only structurally valid questions."""
     try:
-        items = json.loads(raw_text.strip())
+        items = json.loads(_strip_markdown_fence(raw_text))
     except json.JSONDecodeError:
         return []
     if not isinstance(items, list):

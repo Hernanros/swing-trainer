@@ -60,10 +60,20 @@ WARN = minor ambiguity or misleading wording
 OK = question is accurate and clear"""
 
 
+def _strip_markdown_fence(text: str) -> str:
+    """Remove ```json ... ``` or ``` ... ``` wrappers if present."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+    return text.strip()
+
+
 def parse_validation_result(raw_text: str) -> dict:
     """Parse Claude's verdict JSON. Returns a safe default on failure."""
     try:
-        result = json.loads(raw_text.strip())
+        result = json.loads(_strip_markdown_fence(raw_text))
         if result.get("verdict") in ("OK", "WARN", "ERROR"):
             return result
     except (json.JSONDecodeError, AttributeError):
