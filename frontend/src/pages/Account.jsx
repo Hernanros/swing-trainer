@@ -1,6 +1,19 @@
 import { useState } from "react";
 import { useUser } from "../context/UserContext";
 
+const ALL_SKILLS = [
+  { key: 'chart_reading',        label: 'Chart Reading',        desc: 'Key levels, trend structure, setup validity' },
+  { key: 'entry_timing',         label: 'Entry Timing',         desc: 'Precision and confirmation of entries' },
+  { key: 'risk_sizing',          label: 'Risk & Sizing',        desc: 'Position sizing, stop adherence' },
+  { key: 'setup_selection',      label: 'Setup Selection',      desc: 'Avoiding low-quality setups' },
+  { key: 'trade_management',     label: 'Trade Management',     desc: 'Holding through noise, managing exits' },
+  { key: 'emotional_discipline', label: 'Emotional Discipline', desc: 'FOMO, revenge trading, execution' },
+  { key: 'technical_indicators', label: 'Technical Indicators', desc: 'RSI, MACD, Bollinger Bands, VWAP, OBV' },
+  { key: 'market_internals',     label: 'Market Internals',     desc: 'Breadth, VIX, sector rotation, follow-through' },
+  { key: 'short_selling',        label: 'Short Selling',        desc: 'Failed breakouts, H&S tops, covering rules' },
+  { key: 'gap_trading',          label: 'Gap Trading',          desc: 'Gap types, fill probability, earnings gaps' },
+]
+
 function ThemeToggle() {
   const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
 
@@ -41,6 +54,10 @@ export default function Account() {
   const [nameInput, setNameInput] = useState(user?.name || "");
   const [nameError, setNameError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [selectedSkills, setSelectedSkills] = useState(user?.active_skills ?? []);
+  const [skillsSaving, setSkillsSaving] = useState(false);
+  const [skillsError, setSkillsError] = useState("");
+  const [skillsSaved, setSkillsSaved] = useState(false);
 
   async function saveName() {
     const trimmed = nameInput.trim();
@@ -74,6 +91,36 @@ export default function Account() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function saveSkills() {
+    if (selectedSkills.length < 2) {
+      setSkillsError("Select at least 2 skills");
+      return;
+    }
+    setSkillsSaving(true);
+    setSkillsError("");
+    setSkillsSaved(false);
+    try {
+      const res = await fetch("/api/users/me", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ active_skills: selectedSkills }),
+      });
+      if (!res.ok) { setSkillsError("Failed to save skills"); return; }
+      await refreshUser();
+      setSkillsSaved(true);
+    } finally {
+      setSkillsSaving(false);
+    }
+  }
+
+  function toggleSkill(key) {
+    setSkillsSaved(false);
+    setSelectedSkills(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
   }
 
   return (
@@ -123,6 +170,44 @@ export default function Account() {
       <section style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
         <h3 style={{ fontSize: "0.85em", fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Theme</h3>
         <ThemeToggle />
+      </section>
+
+      {/* Skills */}
+      <section style={{ background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "10px", padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
+        <h3 style={{ fontSize: "0.85em", fontWeight: 600, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Active Skills</h3>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {ALL_SKILLS.map(s => (
+            <button
+              key={s.key}
+              onClick={() => toggleSkill(s.key)}
+              style={{
+                display: "flex", alignItems: "center", gap: "12px",
+                padding: "10px 14px", borderRadius: "8px",
+                border: `2px solid ${selectedSkills.includes(s.key) ? "var(--accent)" : "var(--border2)"}`,
+                background: selectedSkills.includes(s.key) ? "var(--surface2)" : "transparent",
+                color: "var(--text)", cursor: "pointer", textAlign: "left",
+                fontFamily: "var(--font)",
+              }}
+            >
+              <span style={{ fontSize: "0.88em", fontWeight: 600 }}>{s.label}</span>
+              <span style={{ fontSize: "0.78em", color: "var(--muted)" }}>{s.desc}</span>
+            </button>
+          ))}
+        </div>
+        {skillsError && <p style={{ color: "var(--red)", fontSize: "0.82em", margin: 0 }}>{skillsError}</p>}
+        {skillsSaved && <p style={{ color: "var(--green)", fontSize: "0.82em", margin: 0 }}>Skills saved.</p>}
+        <button
+          onClick={saveSkills}
+          disabled={skillsSaving}
+          style={{
+            padding: "8px 20px", borderRadius: "8px", width: "fit-content",
+            background: "var(--accent)", color: "#fff", border: "none",
+            cursor: skillsSaving ? "not-allowed" : "pointer",
+            fontFamily: "var(--font)", fontSize: "0.88em", opacity: skillsSaving ? 0.6 : 1,
+          }}
+        >
+          {skillsSaving ? "Saving…" : "Save skills"}
+        </button>
       </section>
 
       {/* Sign out */}

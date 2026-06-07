@@ -3,12 +3,16 @@ import { api } from '../api'
 import { useUser } from '../context/UserContext'
 
 const SKILLS = [
-  { key: 'chart_reading',       label: 'Chart Reading',       desc: 'Key levels, trend structure, setup validity' },
-  { key: 'entry_timing',        label: 'Entry Timing',        desc: 'Precision and confirmation of entries' },
-  { key: 'risk_sizing',         label: 'Risk & Sizing',       desc: 'Position sizing, stop adherence' },
-  { key: 'setup_selection',     label: 'Setup Selection',     desc: 'Avoiding low-quality setups' },
-  { key: 'trade_management',    label: 'Trade Management',    desc: 'Holding through noise, managing exits' },
-  { key: 'emotional_discipline',label: 'Emotional Discipline',desc: 'FOMO, revenge trading, execution' },
+  { key: 'chart_reading',        label: 'Chart Reading',        desc: 'Key levels, trend structure, setup validity' },
+  { key: 'entry_timing',         label: 'Entry Timing',         desc: 'Precision and confirmation of entries' },
+  { key: 'risk_sizing',          label: 'Risk & Sizing',        desc: 'Position sizing, stop adherence' },
+  { key: 'setup_selection',      label: 'Setup Selection',      desc: 'Avoiding low-quality setups' },
+  { key: 'trade_management',     label: 'Trade Management',     desc: 'Holding through noise, managing exits' },
+  { key: 'emotional_discipline', label: 'Emotional Discipline', desc: 'FOMO, revenge trading, execution' },
+  { key: 'technical_indicators', label: 'Technical Indicators', desc: 'RSI, MACD, Bollinger Bands, VWAP, OBV' },
+  { key: 'market_internals',     label: 'Market Internals',     desc: 'Breadth, VIX, sector rotation, follow-through' },
+  { key: 'short_selling',        label: 'Short Selling',        desc: 'Failed breakouts, H&S tops, covering rules' },
+  { key: 'gap_trading',          label: 'Gap Trading',          desc: 'Gap types, fill probability, earnings gaps' },
 ]
 
 const STAGES = [
