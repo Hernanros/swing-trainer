@@ -17,7 +17,11 @@ function selectQuestions(bank, masteryRecords) {
     if (state === 'learning') learning.push(item)
     else newQ.push(item)
   })
-  return [...learning, ...newQ].slice(0, 5)
+  // Always surface at least 2 new questions so the expanded bank gets seen.
+  // Fill remaining slots with learning questions, then more new ones.
+  const newSlots = Math.min(2, newQ.length)
+  const learningSlots = Math.min(5 - newSlots, learning.length)
+  return [...learning.slice(0, learningSlots), ...newQ.slice(0, 5 - learningSlots)]
 }
 
 export default function QuizDrill({ skill, drillKey, drillType, onComplete, questions: questionsProp }) {
