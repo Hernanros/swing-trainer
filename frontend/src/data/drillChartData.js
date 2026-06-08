@@ -425,8 +425,6 @@ const cp_hammer = {
     { time: '2024-11-12', open:  98.5, high:  99.0, low:  97.0, close:  97.5 },
     // HAMMER — small body at top, long lower wick (~4× body)
     { time: '2024-11-13', open:  96.5, high:  97.8, low:  93.0, close:  97.5 },
-    { time: '2024-11-14', open:  97.5, high: 100.0, low:  97.0, close:  99.5 },
-    { time: '2024-11-15', open:  99.5, high: 102.5, low:  99.0, close: 102.0 },
   ],
 }
 
