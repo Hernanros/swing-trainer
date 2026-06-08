@@ -459,8 +459,6 @@ const cp_bullish_engulfing = {
     { time: '2024-11-11', open:  94.5, high:  95.0, low:  93.5, close:  94.0 },
     // BULLISH ENGULFING — opens below prior close, closes above prior open
     { time: '2024-11-12', open:  93.5, high:  96.0, low:  93.0, close:  95.5 },
-    { time: '2024-11-13', open:  95.5, high:  98.0, low:  95.0, close:  97.5 },
-    { time: '2024-11-14', open:  97.5, high: 100.5, low:  97.0, close: 100.0 },
   ],
 }
 
@@ -477,8 +475,6 @@ const cp_bearish_engulfing = {
     { time: '2024-11-11', open:  93.5, high:  94.5, low:  93.0, close:  94.0 },
     // BEARISH ENGULFING — opens above prior close, closes below prior open
     { time: '2024-11-12', open:  94.5, high:  95.0, low:  92.0, close:  92.5 },
-    { time: '2024-11-13', open:  92.5, high:  93.0, low:  90.5, close:  91.0 },
-    { time: '2024-11-14', open:  91.0, high:  91.5, low:  89.0, close:  89.5 },
   ],
 }
 
