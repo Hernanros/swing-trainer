@@ -63,6 +63,46 @@ const CURRICULUM = [
       { id: 'cr_5', text: 'Use the weekly chart as primary timeframe for setup identification; daily for entry precision', ytQuery: 'weekly chart daily chart timeframe swing trading setup identification entry' },
     ],
   },
+  {
+    skill: 'technical_indicators', label: 'Technical Indicators',
+    items: [
+      { id: 'ti_1', text: 'RSI basics: overbought above 70, oversold below 30 — but in strong trends RSI stays extended', ytQuery: 'RSI relative strength index overbought oversold swing trading tutorial' },
+      { id: 'ti_2', text: 'Spot RSI divergence: price makes a new high but RSI does not — early warning of reversal', ytQuery: 'RSI divergence bearish bullish price divergence swing trading' },
+      { id: 'ti_3', text: 'MACD crossovers: signal line cross above zero line = bullish momentum confirmation', ytQuery: 'MACD signal line crossover zero line momentum swing trading tutorial' },
+      { id: 'ti_4', text: 'Bollinger Band squeeze: when bands contract to their tightest, a large move is imminent', ytQuery: 'bollinger band squeeze volatility contraction breakout swing trading' },
+      { id: 'ti_5', text: 'VWAP as intraday anchor: price above VWAP = buyers in control; below = sellers in control', ytQuery: 'VWAP intraday support resistance swing trading day trading anchor' },
+    ],
+  },
+  {
+    skill: 'market_internals', label: 'Market Internals',
+    items: [
+      { id: 'mi_1', text: 'Advance/Decline line: if A/D line diverges from the index (index up, A/D flat), rally is narrowing', ytQuery: 'advance decline line breadth divergence market internals swing trading' },
+      { id: 'mi_2', text: 'New highs vs new lows: a healthy bull market sees new highs expanding, not contracting', ytQuery: 'new 52 week highs lows ratio market breadth leadership swing trading' },
+      { id: 'mi_3', text: 'VIX above 30 signals extreme fear — often a contrarian buy signal near market bottoms', ytQuery: 'VIX fear gauge contrarian signal market bottom swing trading' },
+      { id: 'mi_4', text: 'Follow-through day: a major index up 1.25%+ on higher volume on day 4+ of a rally attempt confirms a new uptrend', ytQuery: 'follow through day IBD market uptrend confirmation rally attempt' },
+      { id: 'mi_5', text: 'Sector rotation: money flows from defensive sectors (utilities, staples) to growth sectors at bull market starts', ytQuery: 'sector rotation cycle bull market growth defensive sectors swing trading' },
+    ],
+  },
+  {
+    skill: 'short_selling', label: 'Short Selling',
+    items: [
+      { id: 'sh_1', text: 'Only short in Stage 3 topping or Stage 4 downtrend — shorting in an uptrend is fighting the tape', ytQuery: 'stage 3 stage 4 short selling downtrend Weinstein swing trading' },
+      { id: 'sh_2', text: 'Failed breakout setup: stock breaks out, then closes back below pivot within 1–2 days — short the reclose', ytQuery: 'failed breakout short setup swing trading entry signal' },
+      { id: 'sh_3', text: 'Head and shoulders top: short entry is the break below the neckline on high volume', ytQuery: 'head and shoulders top neckline break short entry swing trading' },
+      { id: 'sh_4', text: 'Cover rules: close the short at your stop (above the recent high) or at a 20–25% profit target', ytQuery: 'short selling cover rules stop loss profit target swing trading' },
+      { id: 'sh_5', text: 'Short squeeze risk: high short interest + positive catalyst = violent short covering — check float before shorting', ytQuery: 'short squeeze risk high short interest float swing trading risk management' },
+    ],
+  },
+  {
+    skill: 'gap_trading', label: 'Gap Trading',
+    items: [
+      { id: 'gt_1', text: 'Classify the gap: common (fills quickly), breakaway (strong, rarely fills), continuation, exhaustion', ytQuery: 'gap types classification breakaway continuation exhaustion common swing trading' },
+      { id: 'gt_2', text: 'Breakaway gaps on earnings with 3× volume rarely fill — they mark the start of a new trend leg', ytQuery: 'breakaway gap earnings volume swing trading gap and go' },
+      { id: 'gt_3', text: 'Gap fill probability: exhaustion gaps fill 70%+ of the time; breakaway gaps fill less than 20%', ytQuery: 'gap fill probability statistics exhaustion breakaway swing trading' },
+      { id: 'gt_4', text: 'Gap-up entry rule: if a stock gaps above your pivot, only buy if it holds above the gap open after 30 minutes', ytQuery: 'gap up entry rule pivot breakout 30 minute rule swing trading' },
+      { id: 'gt_5', text: 'Pre-market volume on a gap matters: a gap with 500k+ pre-market shares is more significant than a thin gap', ytQuery: 'pre market volume gap significance swing trading earnings gap assessment' },
+    ],
+  },
 ]
 
 export default function Curriculum() {
