@@ -217,3 +217,41 @@ def test_close_option_spread_r_multiple():
     data = resp.json()
     # pnl=300, max_loss = 1.50*2*100 = 300 → r_multiple = 1.0
     assert data["r_multiple"] == 1.0
+
+
+# ── Task 1: pre_trade_advisory column, migration, schema ─────────────────────
+
+def test_trade_model_has_pre_trade_advisory_column():
+    with _engine.connect() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(trades)"))]
+    assert "pre_trade_advisory" in cols, "Missing column: pre_trade_advisory"
+
+
+def test_trade_create_accepts_pre_trade_advisory():
+    from backend.schemas import TradeCreate
+    t = TradeCreate(
+        symbol="SPY",
+        entry_price=1.5,
+        stop_price=0,
+        target_price=3,
+        shares=1,
+        trade_type="option_spread",
+        option_spread_type="bull_put",
+        option_long_strike=440,
+        option_short_strike=445,
+        option_expiry="2026-07-18",
+        pre_trade_advisory="hello",
+    )
+    assert t.pre_trade_advisory == "hello"
+
+
+def test_trade_create_defaults_pre_trade_advisory_to_none():
+    from backend.schemas import TradeCreate
+    t = TradeCreate(
+        symbol="SPY",
+        entry_price=1.5,
+        stop_price=0,
+        target_price=3,
+        shares=1,
+    )
+    assert t.pre_trade_advisory is None
