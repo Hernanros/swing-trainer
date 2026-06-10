@@ -73,7 +73,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 07-02-PLAN.md — Backend pre-trade advisory: `pre_trade_advisory` column + lifespan migration, `generate_spread_advisory` Claude service, `POST /api/trades/spread-advisory` endpoint, persistence on open
+- [x] 07-02-PLAN.md — Backend pre-trade advisory: `pre_trade_advisory` column + lifespan migration, `generate_spread_advisory` Claude service, `POST /api/trades/spread-advisory` endpoint, persistence on open
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
