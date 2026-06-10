@@ -152,6 +152,65 @@ def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_c
     return message.content[0].text
 
 
+def generate_spread_advisory(trade_data, rules: list) -> str:
+    """Return a pre-trade spread advisory (< 200 words, 3 paragraphs).
+
+    Gracefully degrades when ANTHROPIC_API_KEY is unset.
+    """
+    if not _api_key:
+        return "[Advisory unavailable — set ANTHROPIC_API_KEY to enable]"
+
+    symbol              = trade_data.symbol
+    option_spread_type  = trade_data.option_spread_type
+    option_long_strike  = trade_data.option_long_strike
+    option_short_strike = trade_data.option_short_strike
+    option_expiry       = trade_data.option_expiry
+    entry_price         = trade_data.entry_price
+    shares              = trade_data.shares
+
+    width       = abs(option_long_strike - option_short_strike)
+    is_debit    = option_spread_type in _DEBIT_SPREADS
+    spread_label = _SPREAD_LABELS.get(option_spread_type, option_spread_type)
+
+    if is_debit:
+        max_loss   = round(entry_price * shares * 100, 2)
+        max_profit = round((width - entry_price) * shares * 100, 2)
+    else:
+        max_loss   = round((width - entry_price) * shares * 100, 2)
+        max_profit = round(entry_price * shares * 100, 2)
+
+    premium_label = "paid" if is_debit else "received"
+
+    if rules:
+        rules_text = "\n".join(f"- [{r.tier.upper()}] {r.text}" for r in rules)
+    else:
+        rules_text = "No playbook rules loaded."
+
+    prompt = (
+        f"You are a professional options trading coach reviewing a spread before the trade is placed.\n\n"
+        f"Spread: {spread_label} on {symbol}\n"
+        f"Strikes: {option_long_strike}/{option_short_strike} (width: {width})\n"
+        f"Expiry: {option_expiry}\n"
+        f"Premium {premium_label}: ${entry_price} x {shares} contract(s)\n"
+        f"Max risk: ${max_loss} | Max profit: ${max_profit}\n\n"
+        f"Playbook rules:\n{rules_text}\n\n"
+        f"Write exactly 3 unlabeled paragraphs of 2–3 sentences each:\n"
+        f"1. Strike placement — are the strikes well-positioned relative to current price action?\n"
+        f"2. Risk/reward quality — is the premium and risk/reward ratio favorable?\n"
+        f"3. Expectations + when to close + primary risk to watch.\n\n"
+        f"Plain text only. No headers. Under 200 words total."
+    )
+
+    from anthropic import Anthropic
+    client = Anthropic(api_key=_api_key)
+    message = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=300,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    return message.content[0].text
+
+
 def generate_daily_tip(skill: str, context: str = "") -> str:
     label = _SKILL_LABELS.get(skill, skill.replace("_", " ").title())
     if not _api_key:
