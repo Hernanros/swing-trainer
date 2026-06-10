@@ -29,6 +29,7 @@ VALID_DRILL_KEYS = [
     "market_internals",
     "short_selling",
     "gap_trading",
+    "options_setups",
 ]
 
 VALID_STAGES = ["learning", "small_money", "active"]
