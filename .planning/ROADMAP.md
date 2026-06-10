@@ -69,7 +69,7 @@ Swing trading education PWA. Phases 1–6 are complete. Phase 7 extends the app 
 Plans:
 **Wave 1**
 
-- [ ] 07-01-PLAN.md — Options drill bank: add `options_setups` to VALID_DRILL_KEYS and ship 20+ shuffled text-only questions weighted bull put > bear call > shorts
+- [x] 07-01-PLAN.md — Options drill bank: add `options_setups` to VALID_DRILL_KEYS and ship 20+ shuffled text-only questions weighted bull put > bear call > shorts
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
