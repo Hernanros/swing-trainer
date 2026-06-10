@@ -37,45 +37,53 @@ unless strictly necessary.
 
 ## Spacing Scale
 
-The project uses a 4-point base scale. Existing TradeDrawer inline styles cluster at
-these values:
+Phase 7 introduces no new spacing values. All spacing used in new surfaces matches
+existing TradeDrawer inline style values. The Phase 7 spacing contract is:
 
 | Token | Value | Usage |
 |-------|-------|-------|
 | xs | 4px | Icon gaps, tight label-to-field gaps |
-| sm | 8px | Grid gaps between strike fields, option toggle gap |
-| md | 12px | Internal panel padding (checklist, metrics blocks) |
-| lg | 16px | Drawer outer padding, form field stack gap (`gap: 12`) |
-| xl | 20px | Drawer padding, outer page gap |
-| 2xl | 24px | Page-level `.page` padding |
-| 3xl | 32px | Drill card padding |
+| sm | 8px | Grid gaps between strike fields, option toggle gap; advisory panel internal gap |
+| md | 16px | Drawer outer padding declared by this phase (advisory panel sits within existing drawer) |
+| lg | 24px | Page-level `.page` padding |
+| xl | 32px | Drill card padding |
 
-Exceptions:
-- Form field internal padding is `7px 10px` (not a scale multiple) — match existing
-  `field()` helper exactly; do not change.
-- Advisory panel internal padding: `10px 12px` — matches existing `optionMetrics`
-  and checklist blocks exactly.
+### Inherited Spacing (read-only)
+
+The following values appear in surfaces that Phase 7 reuses or sits adjacent to. They
+are **not introduced by Phase 7** and must be matched exactly — do not remap them.
+
+| Value | Source | Usage |
+|-------|--------|-------|
+| 7px (vertical) / 10px (horizontal) | `field()` helper, TradeDrawer.jsx | Form field internal padding (`padding: '7px 10px'`) — inherited from existing input components |
+| 10px / 12px | `optionMetrics` block and checklist panels, TradeDrawer.jsx lines 317, 387, 455, 540, 569 | Panel internal padding (`padding: '10px 12px'`) — advisory panel reuses this exact value to match surrounding blocks. Justified: matching existing `optionMetrics`/checklist visual rhythm is the design intent. Do not remap. |
+| 20px | TradeDrawer.jsx line 247 | Outer drawer container padding (`padding: 20`) — pre-existing, not introduced by Phase 7 |
+| 12px (gap) | TradeDrawer.jsx line 260 | Form column stack gap (`gap: 12`) — pre-existing |
 
 ---
 
 ## Typography
 
-All sizes come directly from TradeDrawer.jsx and globals.css. No new sizes are
-introduced in Phase 7.
+Phase 7 introduces no new font sizes or weights. All sizes are from TradeDrawer.jsx
+and globals.css.
 
 | Role | Size | Weight | Line Height | Usage |
 |------|------|--------|-------------|-------|
 | Body | 14px | 400 | 1.5 | Base document font (`body` in globals.css) |
-| Form label | 11px | 400 | — | All field labels inside TradeDrawer (`fontSize: 11`) |
-| Form input / small | 13px | 400 | — | Input text, advisory body text, drill explanation |
-| Drawer heading | 15px | 700 | — | "Open Trade" title, advisory section heading |
+| Form label | 11px | 400 | — | All field labels inside TradeDrawer (`fontSize: 11`); advisory section label (`AI ADVISORY`) |
+| Form input / small | 13px | 400 | — | Input text, advisory body prose, advisory loading text, advisory error text, drill explanation text |
+| Drawer heading | 15px | 700 | 1.2 | "Open Trade" title, advisory section heading |
 
-Advisory panel body text: 12px, color `var(--text2)`, line-height 1.5.
-This matches the close-mode trade summary block (`fontSize: 12, color: var(--muted)`)
-in TradeDrawer and the `tip-content` style (`font-size: 0.88em, line-height: 1.65`).
+**Typography notes:**
 
-Drill list title: use existing `.drill-list-title` class (`font-weight: 600, 0.95em`).
-Drill list skill label: use existing `.drill-list-skill` class (`0.78em, var(--muted)`).
+- Advisory body prose uses **13px** (same as input text / `fontSize: 13`), not a
+  separate 12px size. This matches the visual weight of the surrounding form context.
+- `.drill-list-title` renders at `font-weight: 600` — this is an **existing class**
+  defined in globals.css and is not introduced by Phase 7. It is referenced here for
+  documentation only; 600 is not a new weight declaration in this phase.
+- `.drill-list-skill` is likewise an existing class (`0.78em, var(--muted)`).
+
+**Phase 7 type scale: exactly 4 sizes (11, 13, 14, 15px) and exactly 2 weights (400, 700).**
 
 ---
 
@@ -125,15 +133,15 @@ fields are filled: `option_spread_type`, `option_expiry`, `option_long_strike`,
                                      padding: '10px 12px', display: flex, flexDirection: column, gap: 8
 
   [header row]                    ← display: flex, justifyContent: space-between, alignItems: center
-    [label]  "AI ADVISORY"        ← fontSize: 11, fontWeight: 600, color: var(--accent),
+    [label]  "AI ADVISORY"        ← fontSize: 11, fontWeight: 700, color: var(--accent),
                                      textTransform: uppercase, letterSpacing: 0.05em
     [button] "Get Advisory"       ← see button spec below
 
   [content area]                  ← one of 3 states:
     STATE idle:     nothing rendered (no copy, no placeholder)
     STATE loading:  spinner + "Evaluating spread…" text
-    STATE result:   advisory prose (12px, var(--text2), lineHeight 1.5)
-    STATE error:    error message (12px, var(--red))
+    STATE result:   advisory prose (fontSize: 13, var(--text2), lineHeight: 1.5)
+    STATE error:    error message (fontSize: 13, var(--red))
 ```
 
 **"Get Advisory" button spec:**
@@ -149,18 +157,18 @@ fields are filled: `option_spread_type`, `option_expiry`, `option_long_strike`,
 **Loading spinner:** A single `<div>` with `width: 14, height: 14, borderRadius: '50%',
 border: '2px solid var(--border2)', borderTopColor: 'var(--accent)',
 animation: 'spin 0.7s linear infinite'`. Add `@keyframes spin` to globals.css if not
-present. Inline with "Evaluating spread…" text at `fontSize: 12, color: var(--muted)`.
+present. Inline with "Evaluating spread…" text at `fontSize: 13, color: var(--muted)`.
 
 **Advisory result display:**
 - Container: same `.drill-explanation` pattern — `background: var(--surface2)`,
   `border: 1px solid var(--border2)`, `borderRadius: 8`, `padding: 16px`,
-  `display: flex`, `flexDirection: column`, `gap: 10`
+  `display: flex`, `flexDirection: column`, `gap: 8`
 - No heading inside the result block (the panel header already says "AI ADVISORY")
-- Advisory prose: `fontSize: 12`, `color: var(--text2)`, `lineHeight: 1.5`
+- Advisory prose: `fontSize: 13`, `color: var(--text2)`, `lineHeight: 1.5`
 - Max 200 words rendered as a single `<p>` — no truncation
 
 **Error state:**
-- Replace result area with: `fontSize: 12, color: var(--red)`
+- Replace result area with: `fontSize: 13, color: var(--red)`
 - Copy: "Advisory unavailable. Check your connection and try again."
 
 **State stored in component:** `advisoryState: 'idle' | 'loading' | 'result' | 'error'`
@@ -310,8 +318,8 @@ Exact copy of the inline style block used for the playbook checklist panel
 `borderRadius: 8`, same `padding: '10px 12px'`.
 
 **Pattern to follow for advisory result prose:**
-Exact copy of `.tip-content` visual style: `fontSize: 0.88em` (or `12px` inline),
-`color: var(--text2)`, `lineHeight: 1.65`.
+Exact copy of `.tip-content` visual style: `fontSize: 13` (matching input text size),
+`color: var(--text2)`, `lineHeight: 1.5`.
 
 **State variable names (suggested):**
 ```js
