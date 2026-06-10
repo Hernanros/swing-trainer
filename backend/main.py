@@ -117,6 +117,9 @@ async def lifespan(app: FastAPI):
         if "option_spread_type" not in option_cols:
             conn.execute(text("ALTER TABLE trades ADD COLUMN option_spread_type TEXT"))
             conn.commit()
+        if "pre_trade_advisory" not in option_cols:
+            conn.execute(text("ALTER TABLE trades ADD COLUMN pre_trade_advisory TEXT"))
+            conn.commit()
     yield
 
 

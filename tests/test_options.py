@@ -217,3 +217,104 @@ def test_close_option_spread_r_multiple():
     data = resp.json()
     # pnl=300, max_loss = 1.50*2*100 = 300 → r_multiple = 1.0
     assert data["r_multiple"] == 1.0
+
+
+# ── Task 1: pre_trade_advisory column, migration, schema ─────────────────────
+
+def test_trade_model_has_pre_trade_advisory_column():
+    with _engine.connect() as conn:
+        cols = [row[1] for row in conn.execute(text("PRAGMA table_info(trades)"))]
+    assert "pre_trade_advisory" in cols, "Missing column: pre_trade_advisory"
+
+
+def test_trade_create_accepts_pre_trade_advisory():
+    from backend.schemas import TradeCreate
+    t = TradeCreate(
+        symbol="SPY",
+        entry_price=1.5,
+        stop_price=0,
+        target_price=3,
+        shares=1,
+        trade_type="option_spread",
+        option_spread_type="bull_put",
+        option_long_strike=440,
+        option_short_strike=445,
+        option_expiry="2026-07-18",
+        pre_trade_advisory="hello",
+    )
+    assert t.pre_trade_advisory == "hello"
+
+
+def test_trade_create_defaults_pre_trade_advisory_to_none():
+    from backend.schemas import TradeCreate
+    t = TradeCreate(
+        symbol="SPY",
+        entry_price=1.5,
+        stop_price=0,
+        target_price=3,
+        shares=1,
+    )
+    assert t.pre_trade_advisory is None
+
+
+# ── Task 2: spread advisory endpoint, pre_trade_advisory persistence ──────────
+
+BULL_PUT_ADVISORY_BODY = {
+    "symbol": "SPY",
+    "option_spread_type": "bull_put",
+    "option_long_strike": 440.0,
+    "option_short_strike": 445.0,
+    "option_expiry": "2026-07-18",
+    "entry_price": 1.5,
+    "shares": 1,
+}
+
+
+def test_spread_advisory_returns_fallback_string_without_api_key():
+    resp = client.post("/api/trades/spread-advisory", json=BULL_PUT_ADVISORY_BODY)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "advisory" in data
+    assert len(data["advisory"]) > 0
+
+
+def test_spread_advisory_rejects_unknown_spread_type():
+    body = {**BULL_PUT_ADVISORY_BODY, "option_spread_type": "invalid_spread"}
+    resp = client.post("/api/trades/spread-advisory", json=body)
+    assert resp.status_code == 400
+
+
+def test_open_option_spread_persists_pre_trade_advisory():
+    body = {
+        **VALID_SPREAD,
+        "option_spread_type":  "bull_put",
+        "option_long_strike":  445.0,
+        "option_short_strike": 450.0,
+        "entry_price":         1.20,
+        "stop_price":          2.40,
+        "target_price":        0.30,
+        "shares":              1,
+        "pre_trade_advisory":  "watch upper strike vs 50-DMA",
+    }
+    resp = client.post("/api/trades/", json=body)
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["pre_trade_advisory"] == "watch upper strike vs 50-DMA"
+
+    # GET listing should also include the advisory
+    list_resp = client.get("/api/trades/")
+    assert list_resp.status_code == 200
+    trades = list_resp.json()
+    assert any(t["pre_trade_advisory"] == "watch upper strike vs 50-DMA" for t in trades)
+
+
+def test_open_option_spread_pre_trade_advisory_defaults_to_none():
+    resp = client.post("/api/trades/", json=VALID_SPREAD)
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data.get("pre_trade_advisory") is None
+
+    list_resp = client.get("/api/trades/")
+    assert list_resp.status_code == 200
+    trades = list_resp.json()
+    assert trades[0]["pre_trade_advisory"] is None

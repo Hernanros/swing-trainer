@@ -85,6 +85,7 @@ class TradeCreate(BaseModel):
     option_long_strike:  Optional[float]= None
     option_short_strike: Optional[float]= None
     option_spread_type:  Optional[str]  = None
+    pre_trade_advisory:  Optional[str]  = None
 
     model_config = {"str_strip_whitespace": True}
 
@@ -124,6 +125,7 @@ class TradeResponse(BaseModel):
     option_long_strike:  Optional[float]= None
     option_short_strike: Optional[float]= None
     option_spread_type:  Optional[str]  = None
+    pre_trade_advisory:  Optional[str]  = None
     max_profit:          Optional[float]= None
     max_loss:            Optional[float]= None
     breakeven:           Optional[float]= None

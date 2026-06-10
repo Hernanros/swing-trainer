@@ -2,6 +2,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from backend.database import get_db, SessionLocal
 from backend.auth import get_current_user
@@ -89,6 +90,7 @@ def _to_response(t: Trade) -> dict:
         "option_long_strike":  t.option_long_strike,
         "option_short_strike": t.option_short_strike,
         "option_spread_type":  t.option_spread_type,
+        "pre_trade_advisory":  t.pre_trade_advisory,
         "max_profit":          None,
         "max_loss":            None,
         "breakeven":           None,
@@ -171,6 +173,7 @@ def open_trade(
         option_long_strike=body.option_long_strike,
         option_short_strike=body.option_short_strike,
         option_spread_type=body.option_spread_type,
+        pre_trade_advisory=body.pre_trade_advisory,
     )
     db.add(trade)
     db.commit()
@@ -284,3 +287,40 @@ def generate_ai_debrief(
     db.commit()
     db.refresh(trade)
     return _to_response(trade)
+
+
+class SpreadAdvisoryRequest(BaseModel):
+    symbol: str
+    option_spread_type: str
+    option_long_strike: float
+    option_short_strike: float
+    option_expiry: str
+    entry_price: float
+    shares: int
+    setup_type: Optional[str] = None
+
+
+@router.post("/spread-advisory")
+def get_spread_advisory(
+    body: SpreadAdvisoryRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if body.option_spread_type not in VALID_SPREADS:
+        raise HTTPException(400, f"option_spread_type must be one of: {sorted(VALID_SPREADS)}")
+
+    if body.setup_type:
+        rules = (
+            db.query(PlaybookRule)
+            .filter(
+                PlaybookRule.user_id == current_user.id,
+                PlaybookRule.setup_type == body.setup_type,
+                PlaybookRule.active == True,
+            )
+            .all()
+        )
+    else:
+        rules = []
+
+    advisory = claude_service.generate_spread_advisory(body, rules)
+    return {"advisory": advisory}
