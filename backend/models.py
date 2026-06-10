@@ -60,6 +60,7 @@ class Trade(Base):
     option_long_strike    = Column(Float,  nullable=True)
     option_short_strike   = Column(Float,  nullable=True)
     option_spread_type    = Column(String, nullable=True)
+    pre_trade_advisory    = Column(Text,   nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     user = relationship("User", back_populates="trades")
