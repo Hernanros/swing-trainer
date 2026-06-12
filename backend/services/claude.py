@@ -70,7 +70,7 @@ def call_claude(prompt: str, max_tokens: int = 1000) -> str:
     return message.content[0].text
 
 
-def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_context: str = "") -> str:
+def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_context: str = "", playbook_rules: list = None) -> str:
     if not _api_key:
         return "[AI debrief unavailable — set ANTHROPIC_API_KEY to enable]"
     from anthropic import Anthropic
@@ -136,12 +136,18 @@ def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_c
         )
 
     context_block = f"\nStudent context:\n{coaching_context}\n" if coaching_context else ""
+    if playbook_rules:
+        rules_text = "\n".join(f"- [{r.tier.upper()}] {r.text}" for r in playbook_rules)
+        rules_block = f"\nPlaybook rules for this setup ({trade.setup_type}):\n{rules_text}\n"
+    else:
+        rules_block = ""
     prompt = (
         f"You are a professional swing trading coach. Analyze this trade and write a concise debrief."
-        f"{context_block}\n"
+        f"{context_block}"
+        f"{rules_block}\n"
         f"Trade:\n{trade_block}\n\n"
         f"{paragraphs}\n\n"
-        f"Be direct and specific. No generic advice."
+        f"Evaluate the trade against the playbook rules above. Be direct and specific. No generic advice."
     )
 
     message = client.messages.create(

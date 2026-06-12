@@ -55,7 +55,16 @@ def _generate_debrief_bg(trade_id: int, rule_detail: Optional[dict] = None) -> N
             return
         user = db.query(User).filter(User.id == trade.user_id).first()
         coaching_context = claude_service.get_user_coaching_context(user, db) if user else ""
-        trade.ai_debrief = claude_service.generate_trade_debrief(trade, rule_detail, coaching_context)
+        playbook_rules = (
+            db.query(PlaybookRule)
+            .filter(
+                PlaybookRule.user_id == trade.user_id,
+                PlaybookRule.setup_type == trade.setup_type,
+                PlaybookRule.active == True,
+            )
+            .all()
+        ) if trade.setup_type else []
+        trade.ai_debrief = claude_service.generate_trade_debrief(trade, rule_detail, coaching_context, playbook_rules)
         db.commit()
     except Exception:
         db.rollback()
@@ -283,7 +292,16 @@ def generate_ai_debrief(
     if trade.status != "closed":
         raise HTTPException(400, "Trade must be closed before generating a debrief")
     coaching_context = claude_service.get_user_coaching_context(current_user, db)
-    trade.ai_debrief = claude_service.generate_trade_debrief(trade, coaching_context=coaching_context)
+    playbook_rules = (
+        db.query(PlaybookRule)
+        .filter(
+            PlaybookRule.user_id == current_user.id,
+            PlaybookRule.setup_type == trade.setup_type,
+            PlaybookRule.active == True,
+        )
+        .all()
+    ) if trade.setup_type else []
+    trade.ai_debrief = claude_service.generate_trade_debrief(trade, coaching_context=coaching_context, playbook_rules=playbook_rules)
     db.commit()
     db.refresh(trade)
     return _to_response(trade)
