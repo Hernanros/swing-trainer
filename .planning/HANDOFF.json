@@ -1,0 +1,39 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-06-14T08:50:00Z",
+  "phase": "08",
+  "phase_name": "Bull Assistant",
+  "phase_dir": ".planning/phases/08-bull-assistant",
+  "plan": 1,
+  "task": 1,
+  "total_tasks": 3,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": "phase-7-01", "name": "Options drill bank", "status": "done", "commit": "1b3d63b"},
+    {"id": "phase-7-02", "name": "Backend spread advisory endpoint", "status": "done", "commit": "ec821e8"},
+    {"id": "phase-7-03", "name": "Frontend advisory panel in TradeDrawer", "status": "done", "commit": "f7a7176"},
+    {"id": "phase-7-04", "name": "Advisory-aware debrief", "status": "done", "commit": "7b1924f"},
+    {"id": "phase-8-design", "name": "Bull Assistant design spec + 3 implementation plans authored", "status": "done", "commit": "cf81192"}
+  ],
+  "remaining_tasks": [
+    {"id": "plan-1", "name": "Foundation — DB models, options abstraction, market extensions", "status": "not_started"},
+    {"id": "plan-2", "name": "Pipeline — screener, scoring, endpoints, scheduler", "status": "not_started"},
+    {"id": "plan-3", "name": "Frontend — Bull page, chat, routing", "status": "not_started"}
+  ],
+  "blockers": [],
+  "human_actions_pending": [],
+  "decisions": [
+    {"decision": "Use yfinance for options data (IVR proxy via IV%)", "rationale": "No Tradier account; yfinance is free and sufficient for POC. TradierOptionsProvider stub in place for easy swap.", "phase": "08"},
+    {"decision": "Approach B: pre-filter screener + Claude Haiku batch scoring", "rationale": "Better latency and cost vs agentic approach C. Claude only sees ~25 candidates, not 500.", "phase": "08"},
+    {"decision": "Daily EOD scan at 5 PM ET via APScheduler in FastAPI lifespan", "rationale": "User wants automated daily scan on closing data; APScheduler runs in-process on Railway without extra service.", "phase": "08"},
+    {"decision": "Three-plan decomposition: Foundation → Pipeline → Frontend", "rationale": "Each plan produces independent testable software.", "phase": "08"},
+    {"decision": "S&P 500 universe (~450 symbols) hardcoded in SP500_UNIVERSE constant", "rationale": "All S&P 500 stocks have liquid options; no extra API needed to discover universe.", "phase": "08"},
+    {"decision": "Top-down layout: macro bar → sector strip → candidates table → chat", "rationale": "User selected layout A in visual companion.", "phase": "08"}
+  ],
+  "uncommitted_files": [
+    ".planning/STATE.md",
+    "IMPROVEMENT-PLAN.md"
+  ],
+  "next_action": "Execute Plan 1 (Foundation): start with Task 1 (add yfinance to requirements.txt) in docs/superpowers/plans/2026-06-14-bull-assistant-plan-1-foundation.md on branch feature/bull-assistant",
+  "context_notes": "Phase 7 fully complete and deployed to Railway. Phase 8 (Bull Assistant) designed and planned in this session. Branch feature/bull-assistant created, plans committed. No code written yet — all 3 plans are ready to execute in sequence."
+}
