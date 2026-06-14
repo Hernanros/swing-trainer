@@ -91,7 +91,7 @@ def stage1_filter(snapshots: dict) -> list:
 def stage2_filter(candidates: list, options_provider) -> list:
     """
     Stage 2: options liquidity filter.
-    Thresholds: ivr >= 20, atm_oi >= 500, atm_spread_pct <= 0.15
+    Thresholds: ivr >= 20, atm_oi >= 200, atm_spread_pct <= 0.15
     Enriches each passing candidate with options snapshot fields.
     """
     passed = []
@@ -102,7 +102,7 @@ def stage2_filter(candidates: list, options_provider) -> list:
             continue
         if opts.get("ivr", 0) < 20:
             continue
-        if opts.get("atm_oi", 0) < 500:
+        if opts.get("atm_oi", 0) < 200:
             continue
         if opts.get("atm_spread_pct", 1.0) > 0.15:
             continue

@@ -42,7 +42,8 @@ class YFinanceOptionsProvider(OptionsDataProvider):
             bid = float(atm_put.get("bid", 0) or 0)
             ask = float(atm_put.get("ask", 0) or 0)
             mid = (bid + ask) / 2
-            spread_pct = round((ask - bid) / mid, 3) if mid > 0 else 1.0
+            # bid=0 is common in yfinance (stale quote); treat as data-unavailable, not wide spread
+            spread_pct = round((ask - bid) / mid, 3) if (mid > 0 and bid > 0) else 0.0
             return {
                 "iv": round(iv, 3),
                 "ivr": round(iv * 100, 1),   # proxy: IV% as IVR until Tradier wired

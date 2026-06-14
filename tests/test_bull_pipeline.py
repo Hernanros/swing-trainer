@@ -61,7 +61,7 @@ def test_stage2_filter_removes_low_open_interest():
     candidates = [{"symbol": "LOWOI", "close": 100.0, "rsi14": 50.0}]
     mock_provider = MagicMock()
     mock_provider.get_options_snapshot.return_value = {
-        "iv": 0.30, "ivr": 30.0, "atm_oi": 100,   # < 500 threshold
+        "iv": 0.30, "ivr": 30.0, "atm_oi": 100,   # < 200 threshold
         "atm_spread_pct": 0.08, "nearest_expiry": "2026-07-18", "atm_strike": 100.0
     }
     result = bull_svc.stage2_filter(candidates, mock_provider)
