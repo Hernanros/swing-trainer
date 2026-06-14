@@ -113,3 +113,47 @@ def test_score_candidates_returns_fallback_without_api_key(monkeypatch):
     assert len(result) == 1
     assert result[0]["symbol"] == "AAPL"
     assert "score" in result[0]
+
+
+# ── Task 5: Position sizing and macro regime ──────────────────────────────────
+
+def test_compute_sizing_returns_correct_contracts():
+    from backend.services.bull import compute_sizing
+    result = compute_sizing(
+        atm_strike=185.0,
+        spread_width=10.0,
+        premium=2.0,
+        account_size=25000.0,
+        risk_per_trade_pct=2.0,
+        max_contracts=5,
+    )
+    assert isinstance(result["contracts"], int)
+    assert result["max_loss_per_contract"] == 800.0
+    assert result["risk_dollars"] == 500.0
+
+
+def test_compute_sizing_respects_max_contracts():
+    from backend.services.bull import compute_sizing
+    result = compute_sizing(
+        atm_strike=100.0,
+        spread_width=5.0,
+        premium=0.5,
+        account_size=1000000.0,
+        risk_per_trade_pct=10.0,
+        max_contracts=3,
+    )
+    assert result["contracts"] <= 3
+
+
+def test_compute_macro_regime_bullish():
+    from backend.services.bull import compute_macro_regime
+    candles = [{"close": 100.0 + i * 0.5} for i in range(55)]
+    regime = compute_macro_regime(candles)
+    assert regime == "bullish"
+
+
+def test_compute_macro_regime_bearish():
+    from backend.services.bull import compute_macro_regime
+    candles = [{"close": 150.0 - i * 0.5} for i in range(55)]
+    regime = compute_macro_regime(candles)
+    assert regime == "bearish"
