@@ -70,12 +70,7 @@ def call_claude(prompt: str, max_tokens: int = 1000) -> str:
     return message.content[0].text
 
 
-def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_context: str = "", playbook_rules: list = None) -> str:
-    if not _api_key:
-        return "[AI debrief unavailable — set ANTHROPIC_API_KEY to enable]"
-    from anthropic import Anthropic
-    client = Anthropic(api_key=_api_key)
-
+def _build_debrief_prompt(trade, rule_detail: Optional[dict] = None, coaching_context: str = "", playbook_rules: list = None) -> str:
     followed_str = ", ".join(rule_detail["followed"]) if rule_detail and rule_detail.get("followed") else "none recorded"
     violated_str = ", ".join(rule_detail["violated"]) if rule_detail and rule_detail.get("violated") else "none recorded"
 
@@ -109,6 +104,8 @@ def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_c
             f"- Rules violated: {violated_str}\n"
             f"- Pre-trade note: {trade.pre_note or 'None'}"
         )
+        if getattr(trade, 'pre_trade_advisory', None):
+            trade_block += f"\n- Pre-trade advisory: {trade.pre_trade_advisory}"
         paragraphs = (
             "Write exactly 4 short paragraphs:\n"
             "1. Plan adherence — did the spread selection and setup match the pre-trade note and checklist?\n"
@@ -116,6 +113,8 @@ def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_c
             "3. Risk management — was position size appropriate relative to max risk, and was the trade managed well?\n"
             "4. Key lesson — one specific, actionable observation from this trade."
         )
+        if getattr(trade, 'pre_trade_advisory', None):
+            paragraphs += "\n\nPre-trade advisory given:\n" + trade.pre_trade_advisory + "\n\nIn paragraph 1, briefly compare whether the outcome matched the advisory's expectations."
     else:
         trade_block = (
             f"- Symbol: {trade.symbol} | Direction: {trade.direction}\n"
@@ -149,6 +148,16 @@ def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_c
         f"{paragraphs}\n\n"
         f"Evaluate the trade against the playbook rules above. Be direct and specific. No generic advice."
     )
+    return prompt
+
+
+def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_context: str = "", playbook_rules: list = None) -> str:
+    if not _api_key:
+        return "[AI debrief unavailable — set ANTHROPIC_API_KEY to enable]"
+    from anthropic import Anthropic
+    client = Anthropic(api_key=_api_key)
+
+    prompt = _build_debrief_prompt(trade, rule_detail, coaching_context, playbook_rules)
 
     message = client.messages.create(
         model="claude-sonnet-4-6",
