@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-06-10T13:51:11.355Z"
-last_activity: 2026-06-10 -- Phase 7 execution started
+last_updated: "2026-06-14T08:26:00Z"
+last_activity: 2026-06-14 -- Phase 7 Plan 04 (Advisory-Aware Debrief) completed
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 4
-  completed_plans: 0
-  percent: 0
+  completed_plans: 4
+  percent: 100
 ---
 
 # Project State
@@ -23,12 +23,12 @@ progress:
 
 ## Current Position
 
-Phase: 7 (Options Trading Module) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 7
-Last activity: 2026-06-10 -- Phase 7 execution started
+Phase: 7 (Options Trading Module) — COMPLETE
+Plan: 4 of 4
+Status: Phase 7 complete
+Last activity: 2026-06-14 -- Phase 7 Plan 04 (Advisory-Aware Debrief) completed
 
-Progress: ██████████░ 85%
+Progress: ███████████ 100%
 
 ## Decisions
 
@@ -41,3 +41,4 @@ Progress: ██████████░ 85%
 - Credit spreads: bull_put, bear_call. Debit spreads: bull_call, bear_put
 - lightweight-charts v5: use addSeries(CandlestickSeries) NOT addCandlestickSeries()
 - DEV_BYPASS_AUTH=true skips all auth and returns first DB user
+- _build_debrief_prompt extracted as module-level helper for testability; pre_trade_advisory wired only in option_spread branch using getattr for backward compat
