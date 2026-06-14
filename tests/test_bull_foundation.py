@@ -94,3 +94,43 @@ def test_bull_scan_response_schema():
     )
     assert resp.scan_date == "2026-06-14"
     assert len(resp.candidates) == 1
+
+
+# ── Task 5: Options data abstraction layer ────────────────────────────────────
+
+from unittest.mock import patch, MagicMock
+
+
+def test_options_provider_factory_returns_yfinance_by_default(monkeypatch):
+    monkeypatch.delenv("TRADIER_API_KEY", raising=False)
+    from backend.services.options import get_options_provider, YFinanceOptionsProvider
+    provider = get_options_provider()
+    assert isinstance(provider, YFinanceOptionsProvider)
+
+
+def test_options_provider_factory_returns_tradier_when_key_set(monkeypatch):
+    monkeypatch.setenv("TRADIER_API_KEY", "fake-key")
+    import importlib
+    import backend.services.options as opt_module
+    importlib.reload(opt_module)
+    from backend.services.options import get_options_provider, TradierOptionsProvider
+    provider = get_options_provider()
+    assert isinstance(provider, TradierOptionsProvider)
+    monkeypatch.delenv("TRADIER_API_KEY", raising=False)
+    importlib.reload(opt_module)
+
+
+def test_yfinance_provider_returns_none_on_error():
+    from backend.services.options import YFinanceOptionsProvider
+    provider = YFinanceOptionsProvider()
+    with patch("yfinance.Ticker") as mock_ticker:
+        mock_ticker.return_value.options = []  # no expirations
+        result = provider.get_options_snapshot("FAKE")
+    assert result is None
+
+
+def test_tradier_provider_raises_not_implemented():
+    from backend.services.options import TradierOptionsProvider
+    provider = TradierOptionsProvider()
+    with pytest.raises(NotImplementedError):
+        provider.get_options_snapshot("AAPL")
