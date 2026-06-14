@@ -32,3 +32,50 @@ def test_stage1_filter_removes_stocks_below_sma50(monkeypatch):
     symbols = [r["symbol"] for r in result]
     assert "ABOVE" in symbols
     assert "BELOW" not in symbols
+
+
+# ── Task 3: Stage 2 screener ──────────────────────────────────────────────────
+
+def test_stage2_filter_removes_low_iv_stocks():
+    from backend.services import bull as bull_svc
+    candidates = [
+        {"symbol": "AAPL", "close": 185.0, "rsi14": 52.0},
+        {"symbol": "LOWIV", "close": 100.0, "rsi14": 50.0},
+    ]
+    def mock_snapshot(symbol):
+        if symbol == "AAPL":
+            return {"iv": 0.34, "ivr": 34.0, "atm_oi": 800, "atm_spread_pct": 0.08, "nearest_expiry": "2026-07-18", "atm_strike": 185.0}
+        if symbol == "LOWIV":
+            return {"iv": 0.10, "ivr": 10.0, "atm_oi": 200, "atm_spread_pct": 0.20, "nearest_expiry": "2026-07-18", "atm_strike": 100.0}
+        return None
+    mock_provider = MagicMock()
+    mock_provider.get_options_snapshot.side_effect = mock_snapshot
+    result = bull_svc.stage2_filter(candidates, mock_provider)
+    symbols = [r["symbol"] for r in result]
+    assert "AAPL" in symbols
+    assert "LOWIV" not in symbols   # ivr < 20
+
+
+def test_stage2_filter_removes_low_open_interest():
+    from backend.services import bull as bull_svc
+    candidates = [{"symbol": "LOWOI", "close": 100.0, "rsi14": 50.0}]
+    mock_provider = MagicMock()
+    mock_provider.get_options_snapshot.return_value = {
+        "iv": 0.30, "ivr": 30.0, "atm_oi": 100,   # < 500 threshold
+        "atm_spread_pct": 0.08, "nearest_expiry": "2026-07-18", "atm_strike": 100.0
+    }
+    result = bull_svc.stage2_filter(candidates, mock_provider)
+    assert result == []
+
+
+def test_stage2_filter_removes_wide_spread():
+    from backend.services import bull as bull_svc
+    candidates = [{"symbol": "WIDESPREAD", "close": 100.0, "rsi14": 50.0}]
+    mock_provider = MagicMock()
+    mock_provider.get_options_snapshot.return_value = {
+        "iv": 0.30, "ivr": 30.0, "atm_oi": 600,
+        "atm_spread_pct": 0.20,   # > 0.15 threshold
+        "nearest_expiry": "2026-07-18", "atm_strike": 100.0
+    }
+    result = bull_svc.stage2_filter(candidates, mock_provider)
+    assert result == []
