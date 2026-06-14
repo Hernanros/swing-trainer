@@ -56,6 +56,7 @@ export const api = {
     open:    (body)     => request('POST', '/trades/', body),
     close:   (id, body) => request('PUT',  `/trades/${id}/close`, body),
     debrief: (id)       => request('POST', `/trades/${id}/ai-debrief`),
+    spreadAdvisory: (body) => request('POST', '/trades/spread-advisory', body),
   },
   playbook: {
     setups:     ()         => request('GET',    '/playbook/setups'),

@@ -413,3 +413,5 @@ body { background: var(--bg); color: var(--text); font-family: var(--font); font
     z-index: 300 !important;
   }
 }
+
+@keyframes spin { to { transform: rotate(360deg); } }

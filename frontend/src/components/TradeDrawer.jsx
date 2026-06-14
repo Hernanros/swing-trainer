@@ -32,6 +32,8 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
   const [checked, setChecked] = useState({})
   const [helperAccount, setHelperAccount] = useState('')
   const [helperRisk, setHelperRisk]       = useState('1')
+  const [advisoryState, setAdvisoryState] = useState('idle') // 'idle' | 'loading' | 'result' | 'error'
+  const [advisoryText, setAdvisoryText]   = useState('')
   const suggestedShares = (() => {
     const account = +helperAccount
     const risk    = +helperRisk
@@ -125,6 +127,10 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
   function set(key, val) {
     setForm(f => ({ ...f, [key]: val }))
     setErrors(e => ({ ...e, [key]: undefined }))
+    if (['option_spread_type', 'option_expiry', 'option_long_strike', 'option_short_strike', 'entry_price'].includes(key)) {
+      setAdvisoryState('idle')
+      setAdvisoryText('')
+    }
   }
 
   function toggleRule(id) {
@@ -136,6 +142,29 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
     if (scoreable.length === 0) return null
     const checkedCount = scoreable.filter(r => checked[r.id]).length
     return Math.round((checkedCount / scoreable.length) * 100)
+  }
+
+  const advisoryReady = !!(form.option_spread_type && form.option_expiry && +form.option_long_strike > 0 && +form.option_short_strike > 0 && +form.entry_price > 0)
+
+  const handleGetAdvisory = async () => {
+    setAdvisoryState('loading')
+    setAdvisoryText('')
+    try {
+      const result = await api.trades.spreadAdvisory({
+        symbol: form.symbol.trim(),
+        option_spread_type: form.option_spread_type,
+        option_long_strike: +form.option_long_strike,
+        option_short_strike: +form.option_short_strike,
+        option_expiry: form.option_expiry,
+        entry_price: +form.entry_price,
+        shares: +form.shares || 1,
+        setup_type: form.setup_type || null
+      })
+      setAdvisoryText(result.advisory)
+      setAdvisoryState('result')
+    } catch {
+      setAdvisoryState('error')
+    }
   }
 
   const mustUnchecked = mode === 'open' ? rules.filter(r => r.tier === 'must' && !checked[r.id]) : []
@@ -194,6 +223,7 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
               option_expiry:       form.option_expiry,
               option_long_strike:  +form.option_long_strike,
               option_short_strike: +form.option_short_strike,
+              pre_trade_advisory: advisoryText || null,
             }),
           }
         : {
@@ -429,6 +459,37 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
                     <div style={{ fontSize: 10, color: 'var(--muted)', marginBottom: 2 }}>Breakeven</div>
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', fontFamily: 'monospace' }}>{optionMetrics.breakeven}</div>
                   </div>
+                </div>
+              )}
+
+              {form.trade_type === 'option_spread' && mode === 'open' && (
+                <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em' }}>AI ADVISORY</span>
+                    {advisoryState !== 'loading' && (
+                      <button
+                        type="button"
+                        onClick={handleGetAdvisory}
+                        disabled={!advisoryReady}
+                        aria-disabled={!advisoryReady ? 'true' : 'false'}
+                        style={{ border: '1px solid var(--accent)', color: 'var(--accent)', fontSize: 11, padding: '4px 10px', borderRadius: 5, background: 'transparent', cursor: advisoryReady ? 'pointer' : 'not-allowed', opacity: advisoryReady ? 1 : 0.4 }}
+                      >
+                        {advisoryState === 'result' ? 'Refresh Advisory' : 'Get Advisory'}
+                      </button>
+                    )}
+                  </div>
+                  {advisoryState === 'loading' && (
+                    <div aria-live="polite" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div aria-label="Loading advisory" style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid var(--border2)', borderTopColor: 'var(--accent)', animation: 'spin 0.7s linear infinite' }} />
+                      <span style={{ fontSize: 13, color: 'var(--muted)' }}>Evaluating spread…</span>
+                    </div>
+                  )}
+                  {advisoryState === 'result' && (
+                    <p role="status" style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.5, whiteSpace: 'pre-wrap', margin: 0 }}>{advisoryText}</p>
+                  )}
+                  {advisoryState === 'error' && (
+                    <p style={{ fontSize: 13, color: 'var(--red)', margin: 0 }}>Advisory unavailable. Check your connection and try again.</p>
+                  )}
                 </div>
               )}
             </>}
