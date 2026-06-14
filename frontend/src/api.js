@@ -103,5 +103,12 @@ export const api = {
     library: ()     => request('GET',  '/tips/library'),
     ask:     (body) => request('POST', '/tips/ask', body),
   },
+  bull: {
+    getProfile: ()     => request('GET',  '/bull/profile'),
+    putProfile: (body) => request('PUT',  '/bull/profile', body),
+    latestScan: ()     => request('GET',  '/bull/scan/latest'),
+    runScan:    ()     => request('POST', '/bull/scan/run', {}),
+    chat:       (body) => request('POST', '/bull/chat', body),
+  },
   me: () => request('GET', '/me'),
 }
