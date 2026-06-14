@@ -197,3 +197,75 @@ def _fetch_quote(symbol: str) -> dict:
             pass
 
     raise ValueError(f"No quote data available for {symbol}")
+
+
+# ── Bull Assistant market extensions ──────────────────────────────────────────
+
+SECTOR_ETFS = ["XLK", "XLF", "XLE", "XLV", "XLY", "XLI", "XLB", "XLRE", "XLU", "XLC", "XLP"]
+
+
+def _compute_sma(closes: list, period: int) -> Optional[float]:
+    if len(closes) < period:
+        return None
+    return round(sum(closes[-period:]) / period, 2)
+
+
+def _compute_rsi(closes: list, period: int = 14) -> Optional[float]:
+    if len(closes) < period + 1:
+        return None
+    deltas = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
+    gains = [d for d in deltas[-period:] if d > 0]
+    losses = [-d for d in deltas[-period:] if d < 0]
+    avg_gain = sum(gains) / period if gains else 0
+    avg_loss = sum(losses) / period if losses else 0
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return round(100 - (100 / (1 + rs)), 2)
+
+
+def get_eod_snapshot(symbol: str) -> Optional[dict]:
+    """EOD technical snapshot: close, sma50, rsi14, volume, avg_volume_20d. Returns None on error."""
+    try:
+        candles = _fetch_candles(symbol.upper(), 60)
+        if len(candles) < 21:
+            return None
+        closes = [c["close"] for c in candles]
+        volumes = [c["volume"] for c in candles]
+        sma50 = _compute_sma(closes, 50)
+        rsi14 = _compute_rsi(closes, 14)
+        avg_vol_20d = int(sum(volumes[-20:]) / 20) if len(volumes) >= 20 else None
+        return {
+            "symbol": symbol.upper(),
+            "close": closes[-1],
+            "sma50": sma50,
+            "rsi14": rsi14,
+            "volume": volumes[-1],
+            "avg_volume_20d": avg_vol_20d,
+        }
+    except Exception:
+        return None
+
+
+def get_sector_etfs() -> list:
+    """Sector ETF rankings with pct_vs_20d and label (strong/neutral/weak)."""
+    results = []
+    for sym in SECTOR_ETFS:
+        try:
+            candles = _fetch_candles(sym, 25)
+            if len(candles) < 21:
+                continue
+            closes = [c["close"] for c in candles]
+            avg_20d = sum(closes[-21:-1]) / 20
+            latest = closes[-1]
+            pct = round((latest - avg_20d) / avg_20d * 100, 2)
+            if pct > 0.5:
+                label = "strong"
+            elif pct < -0.5:
+                label = "weak"
+            else:
+                label = "neutral"
+            results.append({"symbol": sym, "pct_vs_20d": pct, "label": label, "close": latest})
+        except Exception:
+            continue
+    return results

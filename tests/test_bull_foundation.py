@@ -134,3 +134,46 @@ def test_tradier_provider_raises_not_implemented():
     provider = TradierOptionsProvider()
     with pytest.raises(NotImplementedError):
         provider.get_options_snapshot("AAPL")
+
+
+# ── Task 6: Market service extensions ────────────────────────────────────────
+
+def test_sector_etfs_constant_has_11_symbols():
+    from backend.services.market import SECTOR_ETFS
+    assert len(SECTOR_ETFS) == 11
+    assert "XLK" in SECTOR_ETFS
+    assert "XLF" in SECTOR_ETFS
+
+
+def test_get_sector_etfs_returns_list_of_dicts(monkeypatch):
+    from backend.services import market as mkt
+    fake_candles = [
+        {"time": 1000 + i, "open": 100.0, "high": 102.0, "low": 99.0,
+         "close": 100.0 + i * 0.1, "volume": 1000000}
+        for i in range(25)
+    ]
+    monkeypatch.setattr(mkt, "_fetch_candles", lambda sym, days, **kw: fake_candles)
+    result = mkt.get_sector_etfs()
+    assert isinstance(result, list)
+    assert len(result) == 11
+    assert "symbol" in result[0]
+    assert "pct_vs_20d" in result[0]
+    assert "label" in result[0]
+
+
+def test_get_eod_snapshot_returns_dict_with_required_keys(monkeypatch):
+    from backend.services import market as mkt
+    fake_candles = [
+        {"time": 1000 + i, "open": 100.0, "high": 105.0, "low": 95.0,
+         "close": 100.0 + i * 0.5, "volume": 2000000}
+        for i in range(55)
+    ]
+    monkeypatch.setattr(mkt, "_fetch_candles", lambda sym, days, **kw: fake_candles)
+    result = mkt.get_eod_snapshot("AAPL")
+    assert result is not None
+    assert "symbol" in result
+    assert "close" in result
+    assert "sma50" in result
+    assert "rsi14" in result
+    assert "avg_volume_20d" in result
+    assert "volume" in result
