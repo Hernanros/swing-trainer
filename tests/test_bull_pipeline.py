@@ -157,3 +157,42 @@ def test_compute_macro_regime_bearish():
     candles = [{"close": 150.0 - i * 0.5} for i in range(55)]
     regime = compute_macro_regime(candles)
     assert regime == "bearish"
+
+
+# ── Task 6: Pipeline orchestrator + chat ─────────────────────────────────────
+
+def test_chat_returns_fallback_without_api_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    import importlib
+    import backend.services.bull as bull_svc
+    importlib.reload(bull_svc)
+    result = bull_svc.chat(
+        question="Why is AAPL ranked first?",
+        scan_context={"macro": {}, "sectors": [], "top_candidates": []},
+        context_symbol=None,
+    )
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+def test_run_pipeline_returns_expected_shape(monkeypatch):
+    import backend.services.bull as bull_svc
+    import backend.services.market as mkt
+    fake_snap = {"symbol": "AAPL", "close": 185.0, "sma50": 180.0, "rsi14": 52.0,
+                 "volume": 2000000, "avg_volume_20d": 1500000}
+    monkeypatch.setattr(mkt, "get_eod_snapshot", lambda sym: fake_snap if sym == "AAPL" else None)
+    monkeypatch.setattr(mkt, "get_sector_etfs", lambda: [{"symbol": "XLK", "label": "strong", "pct_vs_20d": 1.2, "close": 200.0}])
+    monkeypatch.setattr(mkt, "_fetch_candles", lambda sym, days, **kw: [{"close": 530.0 + i * 0.1} for i in range(55)])
+    mock_opts = MagicMock()
+    mock_opts.get_options_snapshot.return_value = {"iv": 0.34, "ivr": 34.0, "atm_oi": 800, "atm_spread_pct": 0.08, "nearest_expiry": "2026-07-18", "atm_strike": 185.0}
+    monkeypatch.setattr(bull_svc, "score_candidates", lambda c, m, s, r: [{**x, "score": 8.0, "rationale": "test"} for x in c])
+    monkeypatch.setattr(bull_svc, "SP500_UNIVERSE", ["AAPL"])
+    result = bull_svc.run_pipeline(
+        options_provider=mock_opts,
+        playbook_rules=[],
+        bull_profile={"account_size": 25000.0, "risk_per_trade_pct": 1.0, "max_contracts": 5},
+    )
+    assert "macro" in result
+    assert "sectors" in result
+    assert "candidates" in result
+    assert isinstance(result["candidates"], list)
