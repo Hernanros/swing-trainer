@@ -207,4 +207,25 @@ class AccessRequest(Base):
     name         = Column(String, nullable=True)
     status       = Column(String, nullable=False, default="pending")  # pending | approved | rejected
     requested_at = Column(DateTime, nullable=False)
+
+
+class BullProfile(Base):
+    __tablename__ = "bull_profiles"
+    id                 = Column(Integer, primary_key=True)
+    user_id            = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    account_size       = Column(Float, nullable=False)
+    risk_per_trade_pct = Column(Float, nullable=False, default=1.0)
+    max_contracts      = Column(Integer, nullable=False, default=5)
+    updated_at         = Column(String, nullable=True)
+
+
+class BullScan(Base):
+    __tablename__ = "bull_scans"
+    id           = Column(Integer, primary_key=True)
+    user_id      = Column(Integer, ForeignKey("users.id"), nullable=False)
+    scan_date    = Column(String, nullable=False)   # YYYY-MM-DD
+    macro_json   = Column(Text, nullable=True)
+    sectors_json = Column(Text, nullable=True)
+    results_json = Column(Text, nullable=True)
+    created_at   = Column(String, nullable=True)
     reviewed_at  = Column(DateTime, nullable=True)
