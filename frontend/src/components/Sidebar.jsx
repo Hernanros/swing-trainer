@@ -9,6 +9,7 @@ const NAV = [
   { to: '/playbook',  icon: '📋', label: 'Playbook' },
   { to: '/watchlist', icon: '👁️', label: 'Watchlist' },
   { to: '/progress',  icon: '📈', label: 'Progress' },
+  { to: '/bull',      icon: '🐂', label: 'Bull' },
   { to: '/tips',       icon: '💡', label: 'Tips' },
   { to: '/curriculum', icon: '📚', label: 'Curriculum' },
 ]

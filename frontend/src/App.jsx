@@ -17,6 +17,7 @@ import Tips from './pages/Tips'
 import Curriculum from './pages/Curriculum'
 import Admin from './pages/Admin'
 import Account from './pages/Account'
+import Bull from './pages/Bull'
 
 function AppShell() {
   const { user, status, loading } = useUser()
@@ -43,6 +44,7 @@ function AppShell() {
           <Route path="/playbook"  element={<Playbook />} />
           <Route path="/watchlist" element={<Watchlist />} />
           <Route path="/progress"  element={<Progress />} />
+          <Route path="/bull"      element={<Bull />} />
           <Route path="/tips"       element={<Tips />} />
           <Route path="/curriculum" element={<Curriculum />} />
           <Route path="/admin"      element={status === "admin" ? <Admin /> : <Navigate to="/" replace />} />
