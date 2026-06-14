@@ -79,3 +79,37 @@ def test_stage2_filter_removes_wide_spread():
     }
     result = bull_svc.stage2_filter(candidates, mock_provider)
     assert result == []
+
+
+# ── Task 4: Claude Haiku batch scoring ───────────────────────────────────────
+
+def test_build_score_prompt_contains_all_candidate_symbols():
+    from backend.services.bull import _build_score_prompt
+    candidates = [
+        {"symbol": "AAPL", "close": 185.0, "rsi14": 52.0, "iv": 0.34, "ivr": 34.0, "atm_oi": 800, "sector": "XLK"},
+        {"symbol": "MSFT", "close": 415.0, "rsi14": 48.0, "iv": 0.28, "ivr": 28.0, "atm_oi": 600, "sector": "XLK"},
+    ]
+    macro = {"spy": {"regime": "bullish", "close": 535.0, "sma50": 520.0}, "qqq": {"regime": "bullish"}}
+    sectors = [{"symbol": "XLK", "label": "strong", "pct_vs_20d": 1.2}]
+    rules = ["Only enter when RSI is between 40 and 60"]
+    prompt = _build_score_prompt(candidates, macro, sectors, rules)
+    assert "AAPL" in prompt
+    assert "MSFT" in prompt
+    assert "bullish" in prompt
+    assert "XLK" in prompt
+    assert "RSI is between 40 and 60" in prompt
+
+
+def test_score_candidates_returns_fallback_without_api_key(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    import importlib
+    import backend.services.bull as bull_svc
+    importlib.reload(bull_svc)
+    candidates = [{"symbol": "AAPL", "close": 185.0, "rsi14": 52.0, "iv": 0.34, "ivr": 34.0, "atm_oi": 800}]
+    macro = {"spy": {"regime": "bullish"}, "qqq": {"regime": "bullish"}}
+    sectors = []
+    result = bull_svc.score_candidates(candidates, macro, sectors, [])
+    assert isinstance(result, list)
+    assert len(result) == 1
+    assert result[0]["symbol"] == "AAPL"
+    assert "score" in result[0]
