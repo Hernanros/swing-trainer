@@ -3,7 +3,7 @@ from datetime import date, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from backend.database import get_db
-from backend.auth import require_auth
+from backend.auth import get_current_user
 from backend.models import User, BullProfile, BullScan, PlaybookRule
 from backend.schemas import BullProfileCreate, BullProfileResponse, BullChatRequest
 import backend.services.bull as bull_svc
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/bull", tags=["bull"])
 
 
 @router.get("/profile", response_model=BullProfileResponse)
-def get_profile(current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
+def get_profile(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     profile = db.query(BullProfile).filter(BullProfile.user_id == current_user.id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not set")
@@ -28,7 +28,7 @@ def get_profile(current_user: User = Depends(require_auth), db: Session = Depend
 @router.put("/profile", response_model=BullProfileResponse)
 def upsert_profile(
     body: BullProfileCreate,
-    current_user: User = Depends(require_auth),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     profile = db.query(BullProfile).filter(BullProfile.user_id == current_user.id).first()
@@ -58,7 +58,7 @@ def upsert_profile(
 
 
 @router.get("/scan/latest")
-def get_latest_scan(current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
+def get_latest_scan(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     scan = (
         db.query(BullScan)
         .filter(BullScan.user_id == current_user.id)
@@ -77,7 +77,7 @@ def get_latest_scan(current_user: User = Depends(require_auth), db: Session = De
 
 
 @router.post("/scan/run")
-def run_scan(current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
+def run_scan(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     profile = db.query(BullProfile).filter(BullProfile.user_id == current_user.id).first()
     profile_dict = {
         "account_size": profile.account_size if profile else 0,
@@ -117,7 +117,7 @@ def run_scan(current_user: User = Depends(require_auth), db: Session = Depends(g
 @router.post("/chat")
 def bull_chat(
     body: BullChatRequest,
-    current_user: User = Depends(require_auth),
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     scan = (

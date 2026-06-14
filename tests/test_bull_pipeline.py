@@ -206,7 +206,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 from backend.main import app
 from backend.database import get_db, Base
-from backend.auth import require_auth
+from backend.auth import get_current_user
 from backend.models import User
 
 
@@ -232,7 +232,7 @@ def client_with_db():
     db.commit()
     db.refresh(user)
     app.dependency_overrides[get_db] = override_db
-    app.dependency_overrides[require_auth] = lambda: user
+    app.dependency_overrides[get_current_user] = lambda: user
     client = TestClient(app)
     yield client, db, user
     app.dependency_overrides.clear()
