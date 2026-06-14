@@ -145,3 +145,84 @@ def test_debrief_accepts_option_spread_trade(db, user):
     # Must not crash when trade_type is option_spread (no API key, so returns unavailable)
     result = svc.generate_trade_debrief(trade)
     assert "unavailable" in result.lower()
+
+
+# ---------------------------------------------------------------------------
+# Tests for _build_debrief_prompt (07-04)
+# ---------------------------------------------------------------------------
+
+def test_debrief_prompt_includes_pre_trade_advisory_for_option_spread(db, user):
+    from backend.models import Trade
+    from backend.services.claude import _build_debrief_prompt
+    trade = Trade(
+        user_id=user.id, symbol="SPY", direction="long",
+        trade_type="option_spread", option_spread_type="bull_put",
+        option_long_strike=445.0, option_short_strike=440.0,
+        option_expiry="2026-07-18",
+        entry=1.20, stop=0.60, target=2.40, exit=2.40,
+        shares=1, status="closed", date="2026-06-01",
+        pnl=120.0, r_multiple=1.0,
+        pre_trade_advisory="Strikes are too tight at 1% width",
+    )
+    db.add(trade)
+    db.commit()
+    prompt = _build_debrief_prompt(trade)
+    assert "Strikes are too tight at 1% width" in prompt
+    assert "compare whether the outcome matched" in prompt
+
+
+def test_debrief_prompt_omits_advisory_when_none(db, user):
+    from backend.models import Trade
+    from backend.services.claude import _build_debrief_prompt
+    trade = Trade(
+        user_id=user.id, symbol="SPY", direction="long",
+        trade_type="option_spread", option_spread_type="bull_put",
+        option_long_strike=445.0, option_short_strike=440.0,
+        option_expiry="2026-07-18",
+        entry=1.20, stop=0.60, target=2.40, exit=2.40,
+        shares=1, status="closed", date="2026-06-01",
+        pnl=120.0, r_multiple=1.0,
+        pre_trade_advisory=None,
+    )
+    db.add(trade)
+    db.commit()
+    prompt = _build_debrief_prompt(trade)
+    assert "Pre-trade advisory" not in prompt
+    assert "compare whether the outcome matched" not in prompt
+
+
+def test_debrief_prompt_omits_advisory_when_empty_string(db, user):
+    from backend.models import Trade
+    from backend.services.claude import _build_debrief_prompt
+    trade = Trade(
+        user_id=user.id, symbol="SPY", direction="long",
+        trade_type="option_spread", option_spread_type="bull_put",
+        option_long_strike=445.0, option_short_strike=440.0,
+        option_expiry="2026-07-18",
+        entry=1.20, stop=0.60, target=2.40, exit=2.40,
+        shares=1, status="closed", date="2026-06-01",
+        pnl=120.0, r_multiple=1.0,
+        pre_trade_advisory="",
+    )
+    db.add(trade)
+    db.commit()
+    prompt = _build_debrief_prompt(trade)
+    assert "Pre-trade advisory" not in prompt
+    assert "compare whether the outcome matched" not in prompt
+
+
+def test_debrief_prompt_omits_advisory_for_equity_trade(db, user):
+    from backend.models import Trade
+    from backend.services.claude import _build_debrief_prompt
+    trade = Trade(
+        user_id=user.id, symbol="AAPL", direction="long",
+        trade_type="equity",
+        entry=150.0, stop=145.0, target=165.0, exit=162.0,
+        shares=10, status="closed", date="2026-06-01",
+        pnl=120.0, r_multiple=2.4,
+        pre_trade_advisory="should not appear",
+    )
+    db.add(trade)
+    db.commit()
+    prompt = _build_debrief_prompt(trade)
+    assert "should not appear" not in prompt
