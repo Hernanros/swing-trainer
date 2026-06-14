@@ -120,6 +120,36 @@ async def lifespan(app: FastAPI):
         if "pre_trade_advisory" not in option_cols:
             conn.execute(text("ALTER TABLE trades ADD COLUMN pre_trade_advisory TEXT"))
             conn.commit()
+
+        # Bull Assistant tables
+        bull_profile_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(bull_profiles)"))]
+        if not bull_profile_cols:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS bull_profiles (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
+                    account_size REAL NOT NULL,
+                    risk_per_trade_pct REAL NOT NULL DEFAULT 1.0,
+                    max_contracts INTEGER NOT NULL DEFAULT 5,
+                    updated_at TEXT
+                )
+            """))
+            conn.commit()
+
+        bull_scan_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(bull_scans)"))]
+        if not bull_scan_cols:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS bull_scans (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    scan_date TEXT NOT NULL,
+                    macro_json TEXT,
+                    sectors_json TEXT,
+                    results_json TEXT,
+                    created_at TEXT
+                )
+            """))
+            conn.commit()
     yield
 
 
