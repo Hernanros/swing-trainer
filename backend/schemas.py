@@ -210,3 +210,31 @@ class RiskCalcSubmit(BaseModel):
     entry: float
     stop: float
     user_answer: int
+
+
+# ── Bull Assistant ────────────────────────────────────────────────────────────
+
+class BullProfileCreate(BaseModel):
+    account_size: float
+    risk_per_trade_pct: float = 1.0
+    max_contracts: int = 5
+
+
+class BullProfileResponse(BaseModel):
+    account_size: float
+    risk_per_trade_pct: float
+    max_contracts: int
+    updated_at: Optional[str] = None
+
+
+class BullChatRequest(BaseModel):
+    question: str
+    context_symbol: Optional[str] = None
+
+
+class BullScanResponse(BaseModel):
+    scan_date: str
+    macro: dict
+    sectors: list
+    candidates: list
+    created_at: str
