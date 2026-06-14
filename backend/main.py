@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
 import os
 import logging
+import pytz
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI, Depends, Request, HTTPException
 from fastapi.responses import FileResponse
 
@@ -151,7 +153,70 @@ async def lifespan(app: FastAPI):
                 )
             """))
             conn.commit()
+
+    # ── Daily Bull Scan Scheduler ─────────────────────────────────────────────
+    US_MARKET_HOLIDAYS_2026 = {
+        "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03",
+        "2026-05-25", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25",
+    }
+
+    async def _run_scheduled_bull_scan():
+        from datetime import date as _date, datetime as _datetime, timezone as _tz
+        from backend.database import SessionLocal
+        from backend.models import BullProfile, BullScan, PlaybookRule
+        from backend.services.bull import run_pipeline
+        from backend.services.options import get_options_provider
+        import json as _json
+        today = _date.today().isoformat()
+        if today in US_MARKET_HOLIDAYS_2026:
+            _log.info("Bull scan skipped — market holiday %s", today)
+            return
+        db = SessionLocal()
+        try:
+            for profile_row in db.query(BullProfile).all():
+                try:
+                    rules = [r.text for r in db.query(PlaybookRule).filter_by(user_id=profile_row.user_id).all()]
+                    profile_dict = {
+                        "account_size": profile_row.account_size,
+                        "risk_per_trade_pct": profile_row.risk_per_trade_pct,
+                        "max_contracts": profile_row.max_contracts,
+                    }
+                    result = run_pipeline(
+                        options_provider=get_options_provider(),
+                        playbook_rules=rules,
+                        bull_profile=profile_dict,
+                    )
+                    now = _datetime.now(_tz.utc).isoformat()
+                    existing = db.query(BullScan).filter_by(user_id=profile_row.user_id, scan_date=today).first()
+                    if existing:
+                        existing.macro_json = _json.dumps(result["macro"])
+                        existing.sectors_json = _json.dumps(result["sectors"])
+                        existing.results_json = _json.dumps(result["candidates"])
+                        existing.created_at = now
+                    else:
+                        db.add(BullScan(
+                            user_id=profile_row.user_id,
+                            scan_date=today,
+                            macro_json=_json.dumps(result["macro"]),
+                            sectors_json=_json.dumps(result["sectors"]),
+                            results_json=_json.dumps(result["candidates"]),
+                            created_at=now,
+                        ))
+                    db.commit()
+                    _log.info("Bull scan completed for user_id=%s — %d candidates", profile_row.user_id, len(result["candidates"]))
+                except Exception as e:
+                    _log.error("Bull scan failed for user_id=%s: %s", profile_row.user_id, e)
+        finally:
+            db.close()
+
+    scheduler = AsyncIOScheduler(timezone=pytz.timezone("America/New_York"))
+    scheduler.add_job(_run_scheduled_bull_scan, "cron", day_of_week="mon-fri", hour=17, minute=0)
+    scheduler.start()
+    _log.info("Bull scan scheduler started — runs weekdays at 5 PM ET")
+
     yield
+
+    scheduler.shutdown(wait=False)
 
 
 def _resolve_me_status(email: str, db: Session) -> dict:
