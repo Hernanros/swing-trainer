@@ -614,58 +614,6 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
               )}
             </div>
 
-            {!trade?.setup_type ? (
-              <div style={{ fontSize: 12, color: 'var(--dim)' }}>
-                No setup type on this trade.{' '}
-                <span style={{ color: 'var(--accent)', cursor: 'pointer' }} onClick={() => navigate('/playbook')}>
-                  Build your playbook →
-                </span>
-              </div>
-            ) : rules.length === 0 ? (
-              <div style={{ fontSize: 12, color: 'var(--dim)' }}>
-                No playbook rules for "{trade.setup_type}" yet.{' '}
-                <span style={{ color: 'var(--accent)', cursor: 'pointer' }} onClick={() => navigate('/playbook')}>
-                  Add rules →
-                </span>
-              </div>
-            ) : (
-              <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>
-                  Playbook Checklist — {trade.setup_type}
-                </div>
-                {['must', 'should', 'context'].map(tier => {
-                  const tierRules = rules.filter(r => r.tier === tier)
-                  if (tierRules.length === 0) return null
-                  return (
-                    <div key={tier}>
-                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: TIER_COLORS[tier], marginBottom: 4, letterSpacing: '0.06em' }}>
-                        {TIER_LABELS[tier]}
-                      </div>
-                      {tierRules.map(rule => (
-                        <label key={rule.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginBottom: 4 }}>
-                          {tier !== 'context' ? (
-                            <input
-                              type="checkbox"
-                              checked={!!checked[rule.id]}
-                              onChange={() => toggleRule(rule.id)}
-                              style={{ marginTop: 2, flexShrink: 0 }}
-                            />
-                          ) : (
-                            <span style={{ width: 14, height: 14, flexShrink: 0 }} />
-                          )}
-                          <span style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.4 }}>{rule.text}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )
-                })}
-                {checklistScore !== null && (
-                  <div style={{ fontSize: 11, color: 'var(--muted)', borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 4 }}>
-                    Score: <strong style={{ color: 'var(--text)' }}>{checklistScore}%</strong>
-                  </div>
-                )}
-              </div>
-            )}
 
             {field(
               'exit_price',

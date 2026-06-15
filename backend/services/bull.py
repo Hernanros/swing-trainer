@@ -181,18 +181,36 @@ def _build_score_prompt(candidates: list, macro: dict, sectors: list, playbook_r
         f"  {s['symbol']}: {s['label']} ({s.get('pct_vs_20d', 0):+.1f}%)"
         for s in sorted(sectors, key=lambda x: x.get("pct_vs_20d", 0), reverse=True)
     )
-    rules_text = "\n".join(f"- {r}" for r in playbook_rules) if playbook_rules else "No specific rules saved."
     candidate_blocks = "\n".join(
         f"<candidate symbol='{c['symbol']}'>\n"
-        f"  sector: {c.get('sector', 'unknown')}\n"
-        f"  close: ${c.get('close', 0):.2f}\n"
+        f"  sector: {c.get('sector', 'unknown')} ({c.get('sector_label', 'neutral')})\n"
+        f"  close: ${c.get('close', 0):.2f}  sma50: ${c.get('sma50', 0):.2f}\n"
         f"  rsi14: {c.get('rsi14', 0):.1f}\n"
-        f"  iv: {c.get('iv', 0):.1%}\n"
-        f"  ivr_proxy: {c.get('ivr', 0):.0f}\n"
+        f"  iv: {c.get('iv', 0):.1%}  ivr_proxy: {c.get('ivr', 0):.0f}\n"
         f"  atm_oi: {c.get('atm_oi', 0)}\n"
         f"</candidate>"
         for c in candidates
     )
+
+    if playbook_rules:
+        numbered_rules = "\n".join(f"{i+1}. {r}" for i, r in enumerate(playbook_rules))
+        scoring_section = f"""USER'S PLAYBOOK RULES (these are the ONLY criteria that matter for scoring):
+{numbered_rules}
+
+Score each candidate 0-10 based strictly on how many of the user's rules the data supports.
+For each rule, check whether the candidate's data confirms it, contradicts it, or is unclear.
+The score should reflect: (rules clearly met) / (total rules) × 10.
+
+In the rationale, list each rule and mark it ✓ met, ✗ not met, or ? unclear, then give the score.
+Example rationale: "RSI=52 ✓ rule 1. Above SMA50 ✓ rule 2. IV proxy=18 ✗ rule 3 (needs >25). Score 6.7/10."
+Do NOT invent criteria not in the user's rules."""
+    else:
+        scoring_section = """No playbook rules saved. Score each candidate 0-10 on:
+- macro_alignment (0-2): SPY/QQQ regime favorable for bullish credit spreads?
+- sector_strength (0-2): Stock's sector strong=2, neutral=1, weak=0
+- technical_quality (0-3): RSI 40-60, price clearly above SMA50
+- options_setup (0-3): ivr_proxy > 30 = 3pt, 20-30 = 1.5pt; OI > 500 adds 0.5pt"""
+
     return f"""You are a swing trading assistant evaluating bull put spread candidates using EOD closing data.
 
 MARKET CONTEXT:
@@ -201,23 +219,15 @@ MARKET CONTEXT:
 SECTOR RANKINGS (strongest first):
 {sector_lines}
 
-USER'S PLAYBOOK RULES:
-{rules_text}
-
-Score each candidate 0-10 using this rubric:
-- macro_alignment (0-2): SPY/QQQ regime favorable for bullish credit spreads?
-- sector_strength (0-2): Stock's sector in top half? strong=2, neutral=1, weak=0
-- playbook_fit (0-3): How well does the setup match the user's rules?
-- technical_quality (0-2): RSI 40-60 and clear trend above 50d SMA
-- options_setup (0-1): ivr_proxy > 30 = 1pt, 20-30 = 0.5pt
+{scoring_section}
 
 CANDIDATES:
 {candidate_blocks}
 
 Respond in this exact XML format (include ALL candidates, order by total descending):
 <scores>
-<score symbol="SYMBOL" total="8.4" macro="2" sector="2" playbook="2" technical="1.5" options="0.9">
-<rationale>One sentence explaining the score.</rationale>
+<score symbol="SYMBOL" total="8.4">
+<rationale>Per-rule verdict then score.</rationale>
 </score>
 </scores>"""
 
