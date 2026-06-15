@@ -180,7 +180,7 @@ def test_run_pipeline_returns_expected_shape(monkeypatch):
     import backend.services.market as mkt
     fake_snap = {"symbol": "AAPL", "close": 185.0, "sma50": 180.0, "rsi14": 52.0,
                  "volume": 2000000, "avg_volume_20d": 1500000}
-    monkeypatch.setattr(mkt, "get_eod_snapshot", lambda sym: fake_snap if sym == "AAPL" else None)
+    monkeypatch.setattr(bull_svc, "_batch_eod_snapshots", lambda syms: {"AAPL": fake_snap})
     monkeypatch.setattr(mkt, "get_sector_etfs", lambda: [{"symbol": "XLK", "label": "strong", "pct_vs_20d": 1.2, "close": 200.0}])
     monkeypatch.setattr(mkt, "_fetch_candles", lambda sym, days, **kw: [{"close": 530.0 + i * 0.1} for i in range(55)])
     mock_opts = MagicMock()

@@ -62,6 +62,60 @@ _seen: set = set()
 SP500_UNIVERSE = [s for s in SP500_UNIVERSE if not (s in _seen or _seen.add(s))]  # type: ignore[func-returns-value]
 
 
+# ── Batch EOD Snapshot (yfinance) ────────────────────────────────────────────
+
+def _batch_eod_snapshots(symbols: list) -> dict:
+    """
+    Fetch EOD technicals for all symbols in one yfinance batch call.
+    Replaces the per-symbol TwelveData/Finnhub loop — ~30s vs ~50min.
+    Returns dict keyed by symbol with same shape as get_eod_snapshot().
+    """
+    try:
+        import yfinance as yf
+        data = yf.download(
+            tickers=symbols,
+            period="3mo",
+            group_by="ticker",
+            auto_adjust=True,
+            progress=False,
+            threads=True,
+        )
+    except Exception as e:
+        _log.warning("yf.download batch failed: %s", e)
+        return {}
+
+    snapshots = {}
+    for sym in symbols:
+        try:
+            df = data[sym].dropna(how="all")
+            if len(df) < 21:
+                continue
+            closes = df["Close"].tolist()
+            volumes = df["Volume"].tolist()
+            if len(closes) < 21:
+                continue
+            close = float(closes[-1])
+            sma50 = sum(closes[-50:]) / min(50, len(closes))
+            avg_vol_20d = int(sum(volumes[-20:]) / 20)
+            diffs = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
+            gains = [max(d, 0) for d in diffs]
+            losses = [max(-d, 0) for d in diffs]
+            avg_gain = sum(gains[-14:]) / 14 if len(gains) >= 14 else 0
+            avg_loss = sum(losses[-14:]) / 14 if len(losses) >= 14 else 0
+            rsi14 = 100.0 if avg_loss == 0 else round(100 - (100 / (1 + avg_gain / avg_loss)), 2)
+            snapshots[sym] = {
+                "symbol": sym,
+                "close": close,
+                "sma50": round(float(sma50), 4),
+                "rsi14": rsi14,
+                "volume": float(volumes[-1]),
+                "avg_volume_20d": avg_vol_20d,
+            }
+        except Exception:
+            continue
+    return snapshots
+
+
 # ── Stage 1 Screener ──────────────────────────────────────────────────────────
 
 def stage1_filter(snapshots: dict) -> list:
@@ -315,7 +369,7 @@ def run_pipeline(options_provider, playbook_rules: list, bull_profile: dict) -> 
     Full daily scan pipeline. Returns dict with macro, sectors, candidates.
     Each candidate includes score, rationale, and sizing.
     """
-    from backend.services.market import get_eod_snapshot, get_sector_etfs, _fetch_candles, SECTOR_ETFS
+    from backend.services.market import get_sector_etfs, _fetch_candles, SECTOR_ETFS
 
     # 1. Macro regime
     spy_candles = _fetch_candles("SPY", 55)
@@ -346,12 +400,8 @@ def run_pipeline(options_provider, playbook_rules: list, bull_profile: dict) -> 
             sector_map.setdefault(sym, etf)
             break
 
-    # 4. Stage 1: fetch EOD snapshots and filter
-    raw_snapshots: dict = {}
-    for sym in SP500_UNIVERSE:
-        snap = get_eod_snapshot(sym)
-        if snap:
-            raw_snapshots[sym] = snap
+    # 4. Stage 1: batch fetch EOD snapshots and filter
+    raw_snapshots = _batch_eod_snapshots(SP500_UNIVERSE)
     stage1 = stage1_filter(raw_snapshots)
 
     # 5. Stage 2: options liquidity filter
