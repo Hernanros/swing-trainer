@@ -201,8 +201,12 @@ def generate_spread_advisory(trade_data, rules: list) -> str:
     else:
         rules_text = "No playbook rules loaded."
 
+    from datetime import date as _date
+    today = _date.today().isoformat()
+
     prompt = (
         f"You are a professional options trading coach reviewing a spread before the trade is placed.\n\n"
+        f"Today's date: {today}\n"
         f"Spread: {spread_label} on {symbol}\n"
         f"Strikes: {option_long_strike}/{option_short_strike} (width: {width})\n"
         f"Expiry: {option_expiry}\n"
