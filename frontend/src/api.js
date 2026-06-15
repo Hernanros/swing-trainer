@@ -52,10 +52,12 @@ export const api = {
     skills: (id)       => request('GET',  `/users/${id}/skills`),
   },
   trades: {
-    list:    ()         => request('GET',  '/trades/'),
-    open:    (body)     => request('POST', '/trades/', body),
-    close:   (id, body) => request('PUT',  `/trades/${id}/close`, body),
-    debrief: (id)       => request('POST', `/trades/${id}/ai-debrief`),
+    list:    ()         => request('GET',    '/trades/'),
+    open:    (body)     => request('POST',   '/trades/', body),
+    close:   (id, body) => request('PUT',    `/trades/${id}/close`, body),
+    update:  (id, body) => request('PATCH',  `/trades/${id}`, body),
+    delete:  (id)       => request('DELETE', `/trades/${id}`),
+    debrief: (id)       => request('POST',   `/trades/${id}/ai-debrief`),
     spreadAdvisory: (body) => request('POST', '/trades/spread-advisory', body),
   },
   playbook: {

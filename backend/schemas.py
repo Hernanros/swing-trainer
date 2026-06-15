@@ -90,6 +90,25 @@ class TradeCreate(BaseModel):
     model_config = {"str_strip_whitespace": True}
 
 
+class TradeUpdate(BaseModel):
+    symbol:              Optional[str]   = None
+    direction:           Optional[str]   = None
+    entry_price:         Optional[float] = None
+    stop_price:          Optional[float] = None
+    target_price:        Optional[float] = None
+    shares:              Optional[int]   = None
+    pre_note:            Optional[str]   = None
+    setup_type:          Optional[str]   = None
+    practice:            Optional[bool]  = None
+    trade_date:          Optional[str]   = None
+    option_expiry:       Optional[str]   = None
+    option_long_strike:  Optional[float] = None
+    option_short_strike: Optional[float] = None
+    option_spread_type:  Optional[str]   = None
+
+    model_config = {"str_strip_whitespace": True}
+
+
 class TradeClose(BaseModel):
     exit_price: float
     debrief: str

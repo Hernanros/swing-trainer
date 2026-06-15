@@ -111,6 +111,26 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
     if (mode === 'close' && trade) {
       setForm(f => ({ ...f, exit_price: '', debrief: '' }))
     }
+    if (mode === 'edit' && trade) {
+      setForm(f => ({
+        ...f,
+        symbol:              trade.symbol || '',
+        direction:           trade.direction || 'long',
+        entry_price:         trade.entry_price ?? '',
+        stop_price:          trade.stop_price ?? '',
+        target_price:        trade.target_price ?? '',
+        shares:              trade.shares ?? 1,
+        pre_note:            trade.pre_note || '',
+        setup_type:          trade.setup_type || '',
+        practice:            trade.practice || false,
+        trade_date:          trade.trade_date || '',
+        trade_type:          trade.trade_type || 'equity',
+        option_spread_type:  trade.option_spread_type || '',
+        option_long_strike:  trade.option_long_strike ?? '',
+        option_short_strike: trade.option_short_strike ?? '',
+        option_expiry:       trade.option_expiry || '',
+      }))
+    }
     setErrors({})
   }, [mode, trade])
 
@@ -171,7 +191,7 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
 
   function validate() {
     const errs = {}
-    if (mode === 'open') {
+    if (mode === 'open' || mode === 'edit') {
       if (!form.symbol.trim()) errs.symbol = 'Required'
       if (form.trade_type === 'option_spread') {
         if (!form.option_spread_type)             errs.option_spread_type  = 'Required'
@@ -206,28 +226,29 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
     if (Object.keys(errs).length) { setErrors(errs); return }
     setSaving(true)
     try {
+      const openPayload = {
+        symbol:          form.symbol.trim(),
+        ...(form.trade_type === 'equity' && { direction: form.direction }),
+        entry_price:     +form.entry_price,
+        stop_price:      +form.stop_price,
+        target_price:    +form.target_price,
+        shares:          +form.shares,
+        pre_note:        form.pre_note.trim(),
+        setup_type:      form.setup_type || null,
+        practice:        form.practice,
+        trade_date:      form.trade_date || null,
+        trade_type:      form.trade_type,
+        ...(form.trade_type === 'option_spread' && {
+          option_spread_type:  form.option_spread_type,
+          option_expiry:       form.option_expiry,
+          option_long_strike:  +form.option_long_strike,
+          option_short_strike: +form.option_short_strike,
+        }),
+      }
       const data = mode === 'open'
-        ? {
-            symbol:          form.symbol.trim(),
-            ...(form.trade_type === 'equity' && { direction: form.direction }),
-            entry_price:     +form.entry_price,
-            stop_price:      +form.stop_price,
-            target_price:    +form.target_price,
-            shares:          +form.shares,
-            pre_note:        form.pre_note.trim(),
-            setup_type:      form.setup_type || null,
-            practice:        form.practice,
-            checklist_score: computeChecklistScore(),
-            trade_date:      form.trade_date || null,
-            trade_type:      form.trade_type,
-            ...(form.trade_type === 'option_spread' && {
-              option_spread_type:  form.option_spread_type,
-              option_expiry:       form.option_expiry,
-              option_long_strike:  +form.option_long_strike,
-              option_short_strike: +form.option_short_strike,
-              pre_trade_advisory: advisoryText || null,
-            }),
-          }
+        ? { ...openPayload, checklist_score: computeChecklistScore(), pre_trade_advisory: advisoryText || null }
+        : mode === 'edit'
+        ? openPayload
         : {
             exit_price:      +form.exit_price,
             debrief:         form.debrief.trim(),
@@ -281,7 +302,7 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
           <span style={{ fontWeight: 700, color: 'var(--text)', fontSize: 15 }}>
-            {mode === 'open' ? 'Open Trade' : `Close — ${trade?.symbol}`}
+            {mode === 'open' ? 'Open Trade' : mode === 'edit' ? `Edit — ${trade?.symbol}` : `Close — ${trade?.symbol}`}
           </span>
           <button
             onClick={onClose}
@@ -672,7 +693,7 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
               cursor: submitDisabled ? 'not-allowed' : 'pointer', opacity: submitDisabled ? 0.5 : 1,
             }}
           >
-            {saving ? 'Saving…' : mode === 'open' ? 'Open Trade' : 'Close Trade'}
+            {saving ? 'Saving…' : mode === 'open' ? 'Open Trade' : mode === 'edit' ? 'Save Changes' : 'Close Trade'}
           </button>
         </form>
       </div>

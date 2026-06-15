@@ -277,15 +277,30 @@ export default function Progress() {
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
           <div style={{ fontWeight: 700, color: 'var(--text)', fontSize: 14, marginBottom: 12 }}>Summary</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 13, color: 'var(--text2)' }}>
-            <div>Total trades logged</div>
-            <div style={{ textAlign: 'right', fontFamily: 'monospace' }}>{stats.total_trades}</div>
-            <div>Closed trades</div>
+            <div>Closed trades (real)</div>
             <div style={{ textAlign: 'right', fontFamily: 'monospace' }}>{stats.closed_trades}</div>
-            <div>Wins</div>
+            <div>Wins (real)</div>
             <div style={{ textAlign: 'right', fontFamily: 'monospace', color: 'var(--green)' }}>{stats.wins}</div>
-            <div>Losses</div>
+            <div>Losses (real)</div>
             <div style={{ textAlign: 'right', fontFamily: 'monospace', color: 'var(--red)' }}>{stats.closed_trades - stats.wins}</div>
           </div>
+          {stats.paper?.closed_trades > 0 && (
+            <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 8 }}>PAPER TRADING</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, fontSize: 13, color: 'var(--text2)' }}>
+                <div>Closed trades</div>
+                <div style={{ textAlign: 'right', fontFamily: 'monospace' }}>{stats.paper.closed_trades}</div>
+                <div>Win rate</div>
+                <div style={{ textAlign: 'right', fontFamily: 'monospace', color: stats.paper.win_rate >= 50 ? 'var(--green)' : 'var(--red)' }}>
+                  {stats.paper.win_rate != null ? `${stats.paper.win_rate}%` : '—'}
+                </div>
+                <div>Avg R</div>
+                <div style={{ textAlign: 'right', fontFamily: 'monospace', color: stats.paper.avg_r >= 1 ? 'var(--green)' : stats.paper.avg_r >= 0 ? 'var(--yellow)' : 'var(--red)' }}>
+                  {stats.paper.avg_r != null ? `${stats.paper.avg_r >= 0 ? '+' : ''}${stats.paper.avg_r}R` : '—'}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

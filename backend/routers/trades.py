@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from backend.database import get_db, SessionLocal
 from backend.auth import get_current_user
 from backend.models import Trade, User, ChecklistLog, PlaybookRule
-from backend.schemas import TradeCreate, TradeClose, TradeResponse
+from backend.schemas import TradeCreate, TradeClose, TradeUpdate, TradeResponse
 from backend.services import claude as claude_service
 
 router = APIRouter(prefix="/trades", tags=["trades"])
@@ -278,6 +278,44 @@ def close_trade(
     response = _to_response(trade)
     response["closed_count"] = closed_count
     return response
+
+
+@router.patch("/{trade_id}", response_model=TradeResponse)
+def update_trade(
+    trade_id: int,
+    body: TradeUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    trade = db.query(Trade).filter(
+        Trade.id == trade_id,
+        Trade.user_id == current_user.id,
+    ).first()
+    if not trade:
+        raise HTTPException(404, "Trade not found")
+    if trade.status == "closed":
+        raise HTTPException(400, "Cannot edit a closed trade")
+    for field, value in body.model_dump(exclude_unset=True).items():
+        setattr(trade, field, value)
+    db.commit()
+    db.refresh(trade)
+    return _to_response(trade)
+
+
+@router.delete("/{trade_id}", status_code=204)
+def delete_trade(
+    trade_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    trade = db.query(Trade).filter(
+        Trade.id == trade_id,
+        Trade.user_id == current_user.id,
+    ).first()
+    if not trade:
+        raise HTTPException(404, "Trade not found")
+    db.delete(trade)
+    db.commit()
 
 
 @router.post("/{trade_id}/ai-debrief", response_model=TradeResponse)

@@ -38,7 +38,8 @@ export default function Journal() {
   const [trades, setTrades]   = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
-  const [drawer, setDrawer]   = useState(null) // null | { mode:'open' } | { mode:'close', trade }
+  const [drawer, setDrawer]   = useState(null) // null | { mode:'open' } | { mode:'close', trade } | { mode:'edit', trade }
+  const [deletingId, setDeletingId] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
 
   const location = useLocation()
@@ -76,6 +77,22 @@ export default function Journal() {
     if (count && count >= 5 && count % 5 === 0) {
       sessionStorage.setItem('analysis_available', '1')
       window.dispatchEvent(new Event('analysis-badge'))
+    }
+  }
+
+  async function handleEdit(body) {
+    await api.trades.update(drawer.trade.id, body)
+    await loadTrades()
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm('Delete this trade? This cannot be undone.')) return
+    setDeletingId(id)
+    try {
+      await api.trades.delete(id)
+      await loadTrades()
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -156,16 +173,39 @@ export default function Journal() {
                       <span style={{ border: `1px solid ${badge.color}`, borderRadius: 4, padding: '2px 7px', fontSize: 10, fontWeight: 700, color: badge.color, letterSpacing: '0.05em' }}>
                         {badge.label}
                       </span>
+                      {t.practice && (
+                        <span style={{ marginLeft: 5, border: '1px solid var(--muted)', borderRadius: 4, padding: '2px 5px', fontSize: 9, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.05em' }}>
+                          PAPER
+                        </span>
+                      )}
                     </td>
                     <td style={{ padding: '9px 10px' }}>
-                      {t.status === 'open' && (
+                      <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
+                        {t.status === 'open' && (
+                          <>
+                            <button
+                              onClick={e => { e.stopPropagation(); setDrawer({ mode: 'close', trade: t }) }}
+                              style={{ background: 'none', border: '1px solid var(--border2)', borderRadius: 5, color: 'var(--muted)', fontSize: 11, padding: '3px 8px', cursor: 'pointer' }}
+                            >
+                              Close
+                            </button>
+                            <button
+                              onClick={e => { e.stopPropagation(); setDrawer({ mode: 'edit', trade: t }) }}
+                              style={{ background: 'none', border: '1px solid var(--border2)', borderRadius: 5, color: 'var(--accent)', fontSize: 11, padding: '3px 8px', cursor: 'pointer' }}
+                            >
+                              Edit
+                            </button>
+                          </>
+                        )}
                         <button
-                          onClick={() => setDrawer({ mode: 'close', trade: t })}
-                          style={{ background: 'none', border: '1px solid var(--border2)', borderRadius: 5, color: 'var(--muted)', fontSize: 11, padding: '3px 10px', cursor: 'pointer' }}
+                          onClick={e => { e.stopPropagation(); handleDelete(t.id) }}
+                          disabled={deletingId === t.id}
+                          style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 13, padding: '2px 4px', cursor: 'pointer', opacity: deletingId === t.id ? 0.4 : 1 }}
+                          title="Delete trade"
                         >
-                          Close
+                          ✕
                         </button>
-                      )}
+                      </div>
                     </td>
                   </tr>
                   {t.status === 'closed' && expandedId === t.id && (
@@ -227,7 +267,7 @@ export default function Journal() {
           mode={drawer.mode}
           trade={drawer.trade}
           prefill={drawer.prefill}
-          onSubmit={drawer.mode === 'open' ? handleOpen : handleClose}
+          onSubmit={drawer.mode === 'open' ? handleOpen : drawer.mode === 'edit' ? handleEdit : handleClose}
           onClose={() => setDrawer(null)}
         />
       )}
