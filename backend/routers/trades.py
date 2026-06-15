@@ -206,13 +206,16 @@ def close_trade(
         raise HTTPException(404, "Trade not found")
     if trade.status == "closed":
         raise HTTPException(400, "Trade is already closed")
-    if body.exit_price <= 0:
+    is_spread = (trade.trade_type or "equity") == "option_spread"
+    if body.exit_price < 0:
+        raise HTTPException(400, "exit_price must be >= 0")
+    if not is_spread and body.exit_price <= 0:
         raise HTTPException(400, "exit_price must be > 0")
     if not body.debrief.strip():
         raise HTTPException(400, "debrief is required")
 
     exit_price = body.exit_price
-    if (trade.trade_type or "equity") == "option_spread":
+    if is_spread:
         if trade.option_spread_type not in VALID_SPREADS:
             raise HTTPException(400, "Unknown option_spread_type; cannot close")
         is_debit = trade.option_spread_type in DEBIT_SPREADS

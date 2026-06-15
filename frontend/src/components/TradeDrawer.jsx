@@ -192,7 +192,9 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
         if (+form.stop_price   === +form.entry_price)      errs.stop_price   = 'Stop must differ from entry'
       }
     } else {
-      if (!form.exit_price || +form.exit_price <= 0) errs.exit_price = 'Must be > 0'
+      const isSpread = (trade?.trade_type || 'equity') === 'option_spread'
+      if (form.exit_price === '' || +form.exit_price < 0) errs.exit_price = isSpread ? 'Must be >= 0' : 'Must be > 0'
+      if (!isSpread && +form.exit_price <= 0) errs.exit_price = 'Must be > 0'
       if (!form.debrief.trim())                      errs.debrief    = 'Required'
     }
     return errs
@@ -667,9 +669,29 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
 
             {field(
               'exit_price',
-              (trade?.trade_type || 'equity') === 'option_spread' ? 'Exit Premium' : 'Exit Price',
+              (trade?.trade_type || 'equity') === 'option_spread' ? 'Exit Premium (what you pay to close, 0 = expired worthless)' : 'Exit Price',
               'number',
-              (trade?.trade_type || 'equity') === 'option_spread' ? '3.00' : '930.00'
+              (trade?.trade_type || 'equity') === 'option_spread' ? '0' : '930.00'
+            )}
+            {(trade?.trade_type || 'equity') === 'option_spread' && form.exit_price !== '' && (
+              (() => {
+                const entry = trade?.entry_price || 0
+                const exit = +form.exit_price
+                const contracts = trade?.shares || 1
+                const isDebit = ['bull_call','bear_put'].includes(trade?.option_spread_type)
+                const pnl = isDebit
+                  ? (exit - entry) * contracts * 100
+                  : (entry - exit) * contracts * 100
+                const color = pnl > 0 ? 'var(--green)' : pnl < 0 ? 'var(--red)' : 'var(--muted)'
+                return (
+                  <div style={{ fontSize: 12, color, padding: '4px 0' }}>
+                    Est. PnL: <strong>{pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}</strong>
+                    {entry > 0 && <span style={{ color: 'var(--muted)', marginLeft: 8 }}>
+                      ({(Math.abs(pnl) / (entry * contracts * 100) * 100).toFixed(0)}% of max {pnl >= 0 ? 'profit' : 'loss'})
+                    </span>}
+                  </div>
+                )
+              })()
             )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <label style={{ fontSize: 11, color: 'var(--muted)' }}>
