@@ -124,6 +124,12 @@ async def lifespan(app: FastAPI):
             conn.execute(text("ALTER TABLE trades ADD COLUMN pre_trade_advisory TEXT"))
             conn.commit()
 
+        try:
+            conn.execute(text("ALTER TABLE access_requests ADD COLUMN reviewed_at DATETIME"))
+            conn.commit()
+        except Exception:
+            pass
+
         # Bull Assistant tables
         bull_profile_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(bull_profiles)"))]
         if not bull_profile_cols:

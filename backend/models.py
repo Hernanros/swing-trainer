@@ -207,6 +207,7 @@ class AccessRequest(Base):
     name         = Column(String, nullable=True)
     status       = Column(String, nullable=False, default="pending")  # pending | approved | rejected
     requested_at = Column(DateTime, nullable=False)
+    reviewed_at  = Column(DateTime, nullable=True)
 
 
 class BullProfile(Base):
@@ -228,4 +229,3 @@ class BullScan(Base):
     sectors_json = Column(Text, nullable=True)
     results_json = Column(Text, nullable=True)
     created_at   = Column(String, nullable=True)
-    reviewed_at  = Column(DateTime, nullable=True)
