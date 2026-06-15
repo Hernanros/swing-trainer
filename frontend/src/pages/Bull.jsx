@@ -124,6 +124,7 @@ export default function Bull() {
           <MacroBar macro={scan.macro} />
           <SectorStrip sectors={scan.sectors} />
           <CandidatesTable candidates={scan.candidates} />
+          <AssistantPlaybookPanel />
           <ChatPanel
             history={chatHistory}
             input={chatInput}
@@ -206,6 +207,20 @@ function SectorStrip({ sectors }) {
   )
 }
 
+function ScoreBadge({ value, label, primary }) {
+  if (value == null || value === '—') return null
+  const n = typeof value === 'number' ? value : parseFloat(value)
+  const color = n >= 7 ? 'var(--green)' : n >= 4.5 ? 'var(--accent)' : 'var(--red)'
+  if (primary) return (
+    <span style={{ fontWeight: 700, color, fontSize: 14 }}>{n.toFixed(1)}</span>
+  )
+  return (
+    <span style={{ fontSize: 10, color: 'var(--muted)', background: 'var(--surface3,var(--surface2))', borderRadius: 4, padding: '1px 5px', border: '1px solid var(--border2)', whiteSpace: 'nowrap' }}>
+      AI <span style={{ color, fontWeight: 600 }}>{n.toFixed(1)}</span>
+    </span>
+  )
+}
+
 function CandidatesTable({ candidates }) {
   const [expanded, setExpanded] = useState(null)
   if (!candidates || candidates.length === 0) {
@@ -215,28 +230,39 @@ function CandidatesTable({ candidates }) {
       </div>
     )
   }
+  const hasUserScore = candidates.some(c => c.score != null)
   return (
     <div style={{ marginBottom: 24 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '60px 50px 70px 80px 50px 1fr', gap: '0 12px', padding: '4px 8px', fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.05em', borderBottom: '1px solid var(--border2)', marginBottom: 4 }}>
-        <span>TICKER</span><span>SCORE</span><span>CONTRACTS</span><span>MAX LOSS</span><span>IV</span><span>SECTOR</span>
+      <div style={{ display: 'grid', gridTemplateColumns: '60px 80px 70px 80px 50px 1fr', gap: '0 12px', padding: '4px 8px', fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.05em', borderBottom: '1px solid var(--border2)', marginBottom: 4 }}>
+        <span>TICKER</span>
+        <span>{hasUserScore ? 'YOUR / AI' : 'AI SCORE'}</span>
+        <span>CONTRACTS</span><span>MAX LOSS</span><span>IV</span><span>SECTOR</span>
       </div>
       {candidates.map((c, i) => (
         <div key={c.symbol}>
           <div
             onClick={() => setExpanded(expanded === i ? null : i)}
-            style={{ display: 'grid', gridTemplateColumns: '60px 50px 70px 80px 50px 1fr', gap: '0 12px', padding: '8px 8px', fontSize: 13, cursor: 'pointer', borderRadius: 4, background: i === 0 ? 'var(--surface2)' : 'transparent', color: i === 0 ? 'var(--accent)' : 'var(--text2)', borderBottom: '1px solid var(--border2)' }}
+            style={{ display: 'grid', gridTemplateColumns: '60px 80px 70px 80px 50px 1fr', gap: '0 12px', padding: '8px 8px', fontSize: 13, cursor: 'pointer', borderRadius: 4, background: i === 0 ? 'var(--surface2)' : 'transparent', color: i === 0 ? 'var(--accent)' : 'var(--text2)', borderBottom: '1px solid var(--border2)', alignItems: 'center' }}
           >
             <span style={{ fontWeight: i === 0 ? 700 : 400 }}>{c.symbol}</span>
-            <span>{c.score?.toFixed(1)}</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              {hasUserScore && <ScoreBadge value={c.score} primary />}
+              {hasUserScore && <span style={{ color: 'var(--border2)' }}>/</span>}
+              <ScoreBadge value={c.asst_score} primary={!hasUserScore} />
+            </span>
             <span>{c.contracts ?? '—'}</span>
             <span>${c.max_loss_per_contract != null ? c.max_loss_per_contract.toLocaleString() : '—'}</span>
             <span>{c.ivr != null ? Math.round(c.ivr) + '%' : c.iv != null ? (c.iv * 100).toFixed(0) + '%' : '—'}</span>
             <span style={{ color: 'var(--muted)', fontSize: 11 }}>{c.sector || '—'} {c.sector_label === 'strong' ? '▲' : c.sector_label === 'weak' ? '▼' : '→'}</span>
           </div>
           {expanded === i && (
-            <div style={{ background: 'var(--surface2)', borderRadius: 4, padding: '10px 12px', margin: '0 0 4px', fontSize: 12, color: 'var(--text2)', lineHeight: 1.5 }}>
-              <strong>Rationale:</strong> {c.rationale || '—'}
-              <br />
+            <div style={{ background: 'var(--surface2)', borderRadius: 4, padding: '10px 12px', margin: '0 0 4px', fontSize: 12, color: 'var(--text2)', lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {hasUserScore && c.score != null && (
+                <div><strong style={{ color: 'var(--accent)' }}>Your playbook ({c.score?.toFixed(1)}/10):</strong> {c.rationale || '—'}</div>
+              )}
+              {c.asst_rationale && (
+                <div><strong style={{ color: 'var(--muted)' }}>Bull AI ({c.asst_score?.toFixed(1)}/10):</strong> {c.asst_rationale}</div>
+              )}
               <span style={{ color: 'var(--muted)', fontSize: 11 }}>
                 Risk budget: ${c.risk_dollars?.toLocaleString() ?? '—'} · ATM strike: ${c.atm_strike ?? '—'} · Expiry: {c.nearest_expiry ?? '—'}
               </span>
@@ -244,6 +270,47 @@ function CandidatesTable({ candidates }) {
           )}
         </div>
       ))}
+    </div>
+  )
+}
+
+function AssistantPlaybookPanel() {
+  const [open, setOpen] = useState(false)
+  const [rules, setRules] = useState(null)
+
+  async function load() {
+    if (rules) { setOpen(o => !o); return }
+    try {
+      const data = await api.bull.assistantPlaybook()
+      setRules(data.rules)
+      setOpen(true)
+    } catch {
+      setRules([])
+      setOpen(true)
+    }
+  }
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <button
+        onClick={load}
+        style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
+      >
+        {open ? '▲ Hide' : '▼ View'} Bull AI Playbook
+      </button>
+      {open && rules && (
+        <div style={{ background: 'var(--surface2)', borderRadius: 6, padding: '10px 14px', marginTop: 8, fontSize: 12, color: 'var(--text2)', lineHeight: 1.7 }}>
+          <p style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 8px', fontWeight: 700, letterSpacing: '0.05em' }}>
+            BULL ASSISTANT PLAYBOOK — 6 rules for bull put spreads
+          </p>
+          <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {rules.map((r, i) => <li key={i}>{r}</li>)}
+          </ol>
+          <p style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 0' }}>
+            To use this as your own playbook: go to Playbook, create a "Bull Put Spread" setup, and add these as rules.
+          </p>
+        </div>
+      )}
     </div>
   )
 }

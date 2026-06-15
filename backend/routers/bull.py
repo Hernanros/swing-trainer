@@ -12,6 +12,11 @@ from backend.services.options import get_options_provider
 router = APIRouter(prefix="/bull", tags=["bull"])
 
 
+@router.get("/assistant-playbook")
+def get_assistant_playbook():
+    return {"rules": bull_svc.BULL_ASSISTANT_PLAYBOOK}
+
+
 @router.get("/profile", response_model=BullProfileResponse)
 def get_profile(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     profile = db.query(BullProfile).filter(BullProfile.user_id == current_user.id).first()

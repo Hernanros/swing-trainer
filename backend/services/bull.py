@@ -62,6 +62,20 @@ _seen: set = set()
 SP500_UNIVERSE = [s for s in SP500_UNIVERSE if not (s in _seen or _seen.add(s))]  # type: ignore[func-returns-value]
 
 
+# ── Bull Assistant's Built-in Playbook ───────────────────────────────────────
+# Concrete rules checkable from EOD + options snapshot data.
+# Exposed via GET /api/bull/assistant-playbook so the user can read and adopt them.
+
+BULL_ASSISTANT_PLAYBOOK = [
+    "SPY and QQQ must both be in bullish regime (close above 50-day SMA) — no bullish credit spreads against the macro trend",
+    "Stock must be trading above its own 50-day SMA — only sell puts below an uptrending name",
+    "RSI(14) must be between 35 and 65 — avoids names that are overbought (>65) or already breaking down (<35)",
+    "Stock's sector ETF must be strong or neutral — avoid selling puts in a weak sector",
+    "ATM implied volatility proxy (IV × 100) must be at least 25 — minimum premium to make the credit spread worthwhile",
+    "ATM open interest must be at least 300 — confirms the strike is liquid enough to enter and exit cleanly",
+]
+
+
 # ── Batch EOD Snapshot (yfinance) ────────────────────────────────────────────
 
 def _batch_eod_snapshots(symbols: list) -> dict:
@@ -192,24 +206,19 @@ def _build_score_prompt(candidates: list, macro: dict, sectors: list, playbook_r
         for c in candidates
     )
 
+    asst_numbered = "\n".join(f"{i+1}. {r}" for i, r in enumerate(BULL_ASSISTANT_PLAYBOOK))
+
     if playbook_rules:
-        numbered_rules = "\n".join(f"{i+1}. {r}" for i, r in enumerate(playbook_rules))
-        scoring_section = f"""USER'S PLAYBOOK RULES (these are the ONLY criteria that matter for scoring):
-{numbered_rules}
+        user_numbered = "\n".join(f"{i+1}. {r}" for i, r in enumerate(playbook_rules))
+        user_block = f"""USER PLAYBOOK (score as user_total):
+{user_numbered}
 
-Score each candidate 0-10 based strictly on how many of the user's rules the data supports.
-For each rule, check whether the candidate's data confirms it, contradicts it, or is unclear.
-The score should reflect: (rules clearly met) / (total rules) × 10.
-
-In the rationale, list each rule and mark it ✓ met, ✗ not met, or ? unclear, then give the score.
-Example rationale: "RSI=52 ✓ rule 1. Above SMA50 ✓ rule 2. IV proxy=18 ✗ rule 3 (needs >25). Score 6.7/10."
-Do NOT invent criteria not in the user's rules."""
+Score 0-10: (rules clearly met) / (total rules) × 10.
+In user_rationale mark each rule ✓ met / ✗ not met / ? unclear, then state the score.
+Example: "RSI=52 ✓ rule 1. Above SMA50 ✓ rule 2. IV=18 ✗ rule 3. Score 6.7/10."
+Only use data provided. Do NOT invent criteria."""
     else:
-        scoring_section = """No playbook rules saved. Score each candidate 0-10 on:
-- macro_alignment (0-2): SPY/QQQ regime favorable for bullish credit spreads?
-- sector_strength (0-2): Stock's sector strong=2, neutral=1, weak=0
-- technical_quality (0-3): RSI 40-60, price clearly above SMA50
-- options_setup (0-3): ivr_proxy > 30 = 3pt, 20-30 = 1.5pt; OI > 500 adds 0.5pt"""
+        user_block = "USER PLAYBOOK: none saved. Set user_total=\"—\" and user_rationale=\"No playbook rules — add rules in the Playbook page.\""
 
     return f"""You are a swing trading assistant evaluating bull put spread candidates using EOD closing data.
 
@@ -219,15 +228,24 @@ MARKET CONTEXT:
 SECTOR RANKINGS (strongest first):
 {sector_lines}
 
-{scoring_section}
+Score each candidate against TWO playbooks:
+
+{user_block}
+
+BULL ASSISTANT PLAYBOOK (score as asst_total):
+{asst_numbered}
+
+Score 0-10: (rules clearly met) / 6 × 10.
+In asst_rationale mark each rule ✓ met / ✗ not met / ? unclear, then state the score.
 
 CANDIDATES:
 {candidate_blocks}
 
-Respond in this exact XML format (include ALL candidates, order by total descending):
+Respond in this EXACT XML format (include ALL candidates):
 <scores>
-<score symbol="SYMBOL" total="8.4">
-<rationale>Per-rule verdict then score.</rationale>
+<score symbol="SYMBOL" user_total="7.5" asst_total="8.3">
+<user_rationale>Per-rule verdict for user playbook.</user_rationale>
+<asst_rationale>Per-rule verdict for assistant playbook.</asst_rationale>
 </score>
 </scores>"""
 
@@ -237,26 +255,34 @@ def _parse_scores(xml_text: str, candidates: list) -> list:
     results = []
     candidate_map = {c["symbol"]: c for c in candidates}
     for match in re.finditer(
-        r'<score symbol="([^"]+)" total="([^"]+)"[^>]*>\s*<rationale>([^<]*)</rationale>',
+        r'<score symbol="([^"]+)" user_total="([^"]+)" asst_total="([^"]+)"[^>]*>'
+        r'\s*<user_rationale>([^<]*)</user_rationale>'
+        r'\s*<asst_rationale>([^<]*)</asst_rationale>',
         xml_text,
         re.DOTALL,
     ):
-        sym, total, rationale = match.group(1), match.group(2), match.group(3).strip()
+        sym = match.group(1)
         if sym not in candidate_map:
             continue
         candidate = dict(candidate_map[sym])
+        user_raw = match.group(2).strip()
         try:
-            candidate["score"] = float(total)
+            candidate["score"] = float(user_raw)
+        except (ValueError, AttributeError):
+            candidate["score"] = None
+        try:
+            candidate["asst_score"] = float(match.group(3))
         except ValueError:
-            candidate["score"] = 0.0
-        candidate["rationale"] = rationale
+            candidate["asst_score"] = 0.0
+        candidate["rationale"] = match.group(4).strip()
+        candidate["asst_rationale"] = match.group(5).strip()
         results.append(candidate)
-    # Ensure every candidate appears even if Claude dropped some
     scored_syms = {r["symbol"] for r in results}
     for c in candidates:
         if c["symbol"] not in scored_syms:
-            results.append({**c, "score": 0.0, "rationale": "Not scored by model."})
-    return sorted(results, key=lambda x: x["score"], reverse=True)
+            results.append({**c, "score": None, "asst_score": 0.0,
+                            "rationale": "Not scored.", "asst_rationale": "Not scored."})
+    return sorted(results, key=lambda x: x.get("asst_score") or 0, reverse=True)
 
 
 def score_candidates(candidates: list, macro: dict, sectors: list, playbook_rules: list) -> list:
