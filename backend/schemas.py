@@ -257,3 +257,7 @@ class BullScanResponse(BaseModel):
     sectors: list
     candidates: list
     created_at: str
+
+
+class PaperAccountBalanceUpdate(BaseModel):
+    starting_balance: float
