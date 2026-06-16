@@ -36,6 +36,92 @@ function StatTile({ label, value, suffix = '', color }) {
   )
 }
 
+function PaperAccountCard({ data, editing, balanceInput, onEditClick, onBalanceChange, onSave, saving }) {
+  if (!data) return null
+  const pnlColor = data.realized_pnl >= 0 ? 'var(--green)' : 'var(--red)'
+  const balColor = data.current_balance >= data.starting_balance ? 'var(--green)' : 'var(--red)'
+  const fmt = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return (
+    <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '14px 18px', marginBottom: 20 }}>
+      <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em', margin: '0 0 10px' }}>
+        PAPER ACCOUNT
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '4px 16px', fontSize: 13 }}>
+        <span style={{ color: 'var(--muted)' }}>Starting Balance</span>
+        <span style={{ textAlign: 'right', fontFamily: 'monospace' }}>{fmt(data.starting_balance)}</span>
+
+        <span style={{ color: 'var(--muted)' }}>Realized P&L</span>
+        <span style={{ textAlign: 'right', fontFamily: 'monospace', color: pnlColor }}>
+          {data.realized_pnl >= 0 ? '+' : ''}{fmt(data.realized_pnl)}
+        </span>
+
+        <span style={{ color: 'var(--text)', fontWeight: 700 }}>Current Balance</span>
+        <span style={{ textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: balColor }}>
+          {fmt(data.current_balance)}
+        </span>
+      </div>
+
+      <div style={{ borderTop: '1px solid var(--border2)', margin: '10px 0' }} />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '4px 16px', fontSize: 13 }}>
+        <span style={{ color: 'var(--muted)' }}>
+          Capital Deployed{data.open_spread_count > 0 ? ` (${data.open_spread_count} open)` : ''}
+        </span>
+        <span style={{ textAlign: 'right', fontFamily: 'monospace' }}>{fmt(data.capital_deployed)}</span>
+
+        <span style={{ color: 'var(--muted)' }}>Cash Available</span>
+        <span style={{ textAlign: 'right', fontFamily: 'monospace' }}>{fmt(data.cash_available)}</span>
+
+        <span style={{ color: 'var(--muted)' }}>% At Risk</span>
+        <span style={{ textAlign: 'right', fontFamily: 'monospace',
+          color: data.pct_at_risk > 20 ? 'var(--red)' : data.pct_at_risk > 10 ? 'var(--accent)' : 'var(--text2)' }}>
+          {data.pct_at_risk.toFixed(1)}%
+        </span>
+      </div>
+
+      <div style={{ marginTop: 10 }}>
+        {editing ? (
+          <form onSubmit={onSave} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <input
+              type="number"
+              value={balanceInput}
+              onChange={e => onBalanceChange(e.target.value)}
+              placeholder="New starting balance"
+              min="1"
+              step="100"
+              style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 5,
+                color: 'var(--text)', padding: '4px 8px', fontSize: 12 }}
+            />
+            <button
+              type="submit"
+              disabled={saving}
+              style={{ background: 'var(--accent)', border: 'none', borderRadius: 5, color: '#111',
+                padding: '4px 10px', fontSize: 12, fontWeight: 700, cursor: saving ? 'not-allowed' : 'pointer' }}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={() => onEditClick(false)}
+              style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer' }}
+            >
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <button
+            onClick={() => { onEditClick(true); onBalanceChange(String(data.starting_balance)) }}
+            style={{ background: 'none', border: '1px solid var(--border2)', borderRadius: 5,
+              color: 'var(--muted)', fontSize: 11, padding: '3px 10px', cursor: 'pointer' }}
+          >
+            Edit Balance
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Progress() {
   const { user } = useUser()
   const [stats, setStats]             = useState(null)
@@ -46,6 +132,10 @@ export default function Progress() {
   const [analyzeErr, setAnalyzeErr]   = useState(null)
   const [loading, setLoading]         = useState(true)
   const [masteryByKey, setMasteryByKey] = useState({})
+  const [paperAccount, setPaperAccount] = useState(null)
+  const [editingBalance, setEditingBalance] = useState(false)
+  const [balanceInput, setBalanceInput] = useState('')
+  const [savingBalance, setSavingBalance] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -62,6 +152,7 @@ export default function Progress() {
       setSetups(su)
       setMasteryByKey(mb)
     }).catch(err => { console.error('Progress load failed:', err) }).finally(() => setLoading(false))
+    api.paperAccount.get().then(setPaperAccount).catch(() => null)
   }, [user.id])
 
   if (loading) return <div className="loading">Loading…</div>
@@ -71,6 +162,22 @@ export default function Progress() {
 
   const avgRColor = stats?.avg_r == null ? null
     : stats.avg_r >= 1 ? 'var(--green)' : stats.avg_r >= 0 ? 'var(--yellow)' : 'var(--red)'
+
+  async function handleSaveBalance(e) {
+    e.preventDefault()
+    const val = parseFloat(balanceInput)
+    if (isNaN(val) || val <= 0) return
+    setSavingBalance(true)
+    try {
+      const updated = await api.paperAccount.setBalance({ starting_balance: val })
+      setPaperAccount(updated)
+      setEditingBalance(false)
+    } catch {
+      // silent — user can retry
+    } finally {
+      setSavingBalance(false)
+    }
+  }
 
   function handleAnalyze() {
     setAnalyzing(true)
@@ -272,6 +379,16 @@ export default function Progress() {
           })}
         </div>
       </div>
+
+      <PaperAccountCard
+        data={paperAccount}
+        editing={editingBalance}
+        balanceInput={balanceInput}
+        onEditClick={(v) => setEditingBalance(v)}
+        onBalanceChange={setBalanceInput}
+        onSave={handleSaveBalance}
+        saving={savingBalance}
+      />
 
       {stats && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
