@@ -1,5 +1,15 @@
+import math
 import os
 from typing import Optional
+
+
+def _safe_float(val, default=0.0) -> float:
+    """Return default when val is None, NaN, or infinite."""
+    try:
+        f = float(val)
+        return default if (math.isnan(f) or math.isinf(f)) else f
+    except (TypeError, ValueError):
+        return default
 
 
 class OptionsDataProvider:
@@ -37,10 +47,10 @@ class YFinanceOptionsProvider(OptionsDataProvider):
             puts = puts.copy()
             puts["_dist"] = (puts["strike"] - current_price).abs()
             atm_put = puts.nsmallest(1, "_dist").iloc[0]
-            iv = float(atm_put.get("impliedVolatility", 0) or 0)
+            iv = _safe_float(atm_put.get("impliedVolatility"))
             oi = int(atm_put.get("openInterest", 0) or 0)
-            bid = float(atm_put.get("bid", 0) or 0)
-            ask = float(atm_put.get("ask", 0) or 0)
+            bid = _safe_float(atm_put.get("bid"))
+            ask = _safe_float(atm_put.get("ask"))
             mid = (bid + ask) / 2
             # bid=0 is common in yfinance (stale quote); treat as data-unavailable, not wide spread
             spread_pct = round((ask - bid) / mid, 3) if (mid > 0 and bid > 0) else 0.0

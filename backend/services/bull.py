@@ -467,4 +467,15 @@ def run_pipeline(options_provider, playbook_rules: list, bull_profile: dict) -> 
         sizing = compute_sizing(atm_strike, spread_width, premium, account_size, risk_pct, max_contracts)
         c.update(sizing)
 
-    return {"macro": macro, "sectors": sectors, "candidates": scored}
+    return _sanitize({"macro": macro, "sectors": sectors, "candidates": scored})
+
+
+def _sanitize(obj):
+    """Recursively replace NaN/inf floats with None so JSON serialization never fails."""
+    if isinstance(obj, float):
+        return None if (math.isnan(obj) or math.isinf(obj)) else obj
+    if isinstance(obj, dict):
+        return {k: _sanitize(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_sanitize(v) for v in obj]
+    return obj
