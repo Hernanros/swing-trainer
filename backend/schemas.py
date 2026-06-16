@@ -261,3 +261,10 @@ class BullScanResponse(BaseModel):
 
 class PaperAccountBalanceUpdate(BaseModel):
     starting_balance: float
+
+    @field_validator("starting_balance")
+    @classmethod
+    def must_be_positive(cls, v):
+        if v <= 0:
+            raise ValueError("starting_balance must be greater than 0")
+        return v

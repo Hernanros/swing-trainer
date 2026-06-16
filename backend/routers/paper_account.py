@@ -8,6 +8,8 @@ from backend.schemas import PaperAccountBalanceUpdate
 
 router = APIRouter(prefix="/paper-account", tags=["paper_account"])
 
+_DEBIT_SPREADS = {"bull_call", "bear_put"}
+
 
 def _compute_snapshot(user_id: int, db: Session, starting_balance: float) -> dict:
     closed = db.query(Trade).filter_by(user_id=user_id, practice=True, status="closed").all()
@@ -25,7 +27,10 @@ def _compute_snapshot(user_id: int, db: Session, starting_balance: float) -> dic
     for t in open_spreads:
         if all(v is not None for v in [t.option_short_strike, t.option_long_strike, t.entry, t.shares]):
             spread_width = abs(t.option_short_strike - t.option_long_strike)
-            max_loss = (spread_width - t.entry) * 100 * t.shares
+            if t.option_spread_type in _DEBIT_SPREADS:
+                max_loss = t.entry * 100 * t.shares
+            else:
+                max_loss = (spread_width - t.entry) * 100 * t.shares
             if max_loss > 0:
                 capital_deployed += max_loss
 

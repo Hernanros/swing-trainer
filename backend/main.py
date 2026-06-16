@@ -166,7 +166,7 @@ async def lifespan(app: FastAPI):
             conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS paper_accounts (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    user_id INTEGER NOT NULL UNIQUE REFERENCES users(id),
                     starting_balance REAL NOT NULL,
                     updated_at TEXT NOT NULL
                 )

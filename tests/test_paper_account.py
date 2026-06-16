@@ -155,3 +155,31 @@ def test_put_balance_updates_starting_balance():
 
     resp2 = client.get("/api/paper-account")
     assert resp2.json()["starting_balance"] == 50000.0
+
+
+def test_put_balance_rejects_zero_or_negative():
+    assert client.put("/api/paper-account/balance", json={"starting_balance": 0.0}).status_code == 422
+    assert client.put("/api/paper-account/balance", json={"starting_balance": -100.0}).status_code == 422
+
+
+def test_get_paper_account_computes_capital_deployed_debit_spread():
+    db = TestingSessionLocal()
+    user = db.query(User).first()
+    from datetime import date
+    # bull call spread (debit): entry=2.00, shares(=contracts)=3
+    # max_loss = entry * 100 * contracts = 2.00 * 100 * 3 = 600
+    db.add(Trade(
+        user_id=user.id, symbol="QQQ", trade_type="option_spread",
+        option_spread_type="bull_call", entry=2.00,
+        option_short_strike=410.0, option_long_strike=405.0, shares=3,
+        stop=0.0, target=0.0, direction="long",
+        status="open", practice=True, date=date.today().isoformat(),
+        trade_date=date.today().isoformat()
+    ))
+    db.commit()
+    db.close()
+
+    resp = client.get("/api/paper-account")
+    data = resp.json()
+    assert data["capital_deployed"] == 600.0
+    assert data["open_spread_count"] == 1

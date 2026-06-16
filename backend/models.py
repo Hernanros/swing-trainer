@@ -224,7 +224,7 @@ class BullProfile(Base):
 class PaperAccount(Base):
     __tablename__ = "paper_accounts"
     id               = Column(Integer, primary_key=True)
-    user_id          = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id          = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
     starting_balance = Column(Float, nullable=False)
     updated_at       = Column(String, nullable=False)
 

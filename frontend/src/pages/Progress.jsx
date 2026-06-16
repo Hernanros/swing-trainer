@@ -40,7 +40,10 @@ function PaperAccountCard({ data, editing, balanceInput, onEditClick, onBalanceC
   if (!data) return null
   const pnlColor = data.realized_pnl >= 0 ? 'var(--green)' : 'var(--red)'
   const balColor = data.current_balance >= data.starting_balance ? 'var(--green)' : 'var(--red)'
-  const fmt = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const fmt = (n) => {
+    const abs = Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+    return n < 0 ? `-$${abs}` : `$${abs}`
+  }
   return (
     <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '14px 18px', marginBottom: 20 }}>
       <p style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', letterSpacing: '0.05em', margin: '0 0 10px' }}>
@@ -191,6 +194,16 @@ export default function Progress() {
   return (
     <div className="page">
       <h2 style={{ color: 'var(--text)', fontWeight: 700 }}>Progress</h2>
+
+      <PaperAccountCard
+        data={paperAccount}
+        editing={editingBalance}
+        balanceInput={balanceInput}
+        onEditClick={(v) => setEditingBalance(v)}
+        onBalanceChange={setBalanceInput}
+        onSave={handleSaveBalance}
+        saving={savingBalance}
+      />
 
       <div className="stat-tiles">
         <StatTile
@@ -379,16 +392,6 @@ export default function Progress() {
           })}
         </div>
       </div>
-
-      <PaperAccountCard
-        data={paperAccount}
-        editing={editingBalance}
-        balanceInput={balanceInput}
-        onEditClick={(v) => setEditingBalance(v)}
-        onBalanceChange={setBalanceInput}
-        onSave={handleSaveBalance}
-        saving={savingBalance}
-      />
 
       {stats && (
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20 }}>
