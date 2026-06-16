@@ -112,6 +112,7 @@ export const api = {
     runScan:            ()     => request('POST', '/bull/scan/run', {}),
     chat:               (body) => request('POST', '/bull/chat', body),
     assistantPlaybook:  ()     => request('GET',  '/bull/assistant-playbook'),
+    seedPlaybook:       ()     => request('POST', '/bull/seed-playbook', {}),
   },
   me: () => request('GET', '/me'),
 }

@@ -119,6 +119,24 @@ def run_scan(current_user: User = Depends(get_current_user), db: Session = Depen
     return {"scan_date": today, "candidates_count": len(result["candidates"]), "created_at": now}
 
 
+@router.post("/seed-playbook")
+def seed_playbook(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    existing = db.query(PlaybookRule).filter_by(user_id=current_user.id, setup_type="bull_put_spread").first()
+    if existing:
+        return {"already_seeded": True, "setup_type": "bull_put_spread"}
+    for i, rule_text in enumerate(bull_svc.BULL_ASSISTANT_PLAYBOOK):
+        db.add(PlaybookRule(
+            user_id=current_user.id,
+            setup_type="bull_put_spread",
+            text=rule_text,
+            tier="must",
+            active=True,
+            position=i,
+        ))
+    db.commit()
+    return {"already_seeded": False, "setup_type": "bull_put_spread", "created": len(bull_svc.BULL_ASSISTANT_PLAYBOOK)}
+
+
 @router.post("/chat")
 def bull_chat(
     body: BullChatRequest,

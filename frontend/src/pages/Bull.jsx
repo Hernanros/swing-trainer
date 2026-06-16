@@ -230,26 +230,23 @@ function CandidatesTable({ candidates }) {
       </div>
     )
   }
-  const hasUserScore = candidates.some(c => c.score != null)
   return (
     <div style={{ marginBottom: 24 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '60px 80px 70px 80px 50px 1fr', gap: '0 12px', padding: '4px 8px', fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.05em', borderBottom: '1px solid var(--border2)', marginBottom: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '60px 65px 65px 70px 80px 50px 1fr', gap: '0 12px', padding: '4px 8px', fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.05em', borderBottom: '1px solid var(--border2)', marginBottom: 4 }}>
         <span>TICKER</span>
-        <span>{hasUserScore ? 'YOUR / AI' : 'AI SCORE'}</span>
+        <span>YOUR SCORE</span>
+        <span>AI SCORE</span>
         <span>CONTRACTS</span><span>MAX LOSS</span><span>IV</span><span>SECTOR</span>
       </div>
       {candidates.map((c, i) => (
         <div key={c.symbol}>
           <div
             onClick={() => setExpanded(expanded === i ? null : i)}
-            style={{ display: 'grid', gridTemplateColumns: '60px 80px 70px 80px 50px 1fr', gap: '0 12px', padding: '8px 8px', fontSize: 13, cursor: 'pointer', borderRadius: 4, background: i === 0 ? 'var(--surface2)' : 'transparent', color: i === 0 ? 'var(--accent)' : 'var(--text2)', borderBottom: '1px solid var(--border2)', alignItems: 'center' }}
+            style={{ display: 'grid', gridTemplateColumns: '60px 65px 65px 70px 80px 50px 1fr', gap: '0 12px', padding: '8px 8px', fontSize: 13, cursor: 'pointer', borderRadius: 4, background: i === 0 ? 'var(--surface2)' : 'transparent', color: i === 0 ? 'var(--accent)' : 'var(--text2)', borderBottom: '1px solid var(--border2)', alignItems: 'center' }}
           >
             <span style={{ fontWeight: i === 0 ? 700 : 400 }}>{c.symbol}</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              {hasUserScore && <ScoreBadge value={c.score} primary />}
-              {hasUserScore && <span style={{ color: 'var(--border2)' }}>/</span>}
-              <ScoreBadge value={c.asst_score} primary={!hasUserScore} />
-            </span>
+            <span>{c.score != null ? <ScoreBadge value={c.score} primary /> : <span style={{ color: 'var(--muted)' }}>—</span>}</span>
+            <span><ScoreBadge value={c.asst_score} primary /></span>
             <span>{c.contracts ?? '—'}</span>
             <span>${c.max_loss_per_contract != null ? c.max_loss_per_contract.toLocaleString() : '—'}</span>
             <span>{c.ivr != null ? Math.round(c.ivr) + '%' : c.iv != null ? (c.iv * 100).toFixed(0) + '%' : '—'}</span>
@@ -257,7 +254,7 @@ function CandidatesTable({ candidates }) {
           </div>
           {expanded === i && (
             <div style={{ background: 'var(--surface2)', borderRadius: 4, padding: '10px 12px', margin: '0 0 4px', fontSize: 12, color: 'var(--text2)', lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {hasUserScore && c.score != null && (
+              {c.score != null && (
                 <div><strong style={{ color: 'var(--accent)' }}>Your playbook ({c.score?.toFixed(1)}/10):</strong> {c.rationale || '—'}</div>
               )}
               {c.asst_rationale && (
@@ -277,6 +274,9 @@ function CandidatesTable({ candidates }) {
 function AssistantPlaybookPanel() {
   const [open, setOpen] = useState(false)
   const [rules, setRules] = useState(null)
+  const [seeded, setSeeded] = useState(false)
+  const [seeding, setSeeding] = useState(false)
+  const [seedMsg, setSeedMsg] = useState(null)
 
   async function load() {
     if (rules) { setOpen(o => !o); return }
@@ -287,6 +287,19 @@ function AssistantPlaybookPanel() {
     } catch {
       setRules([])
       setOpen(true)
+    }
+  }
+
+  async function handleSeed() {
+    setSeeding(true)
+    try {
+      const resp = await api.bull.seedPlaybook()
+      setSeeded(true)
+      setSeedMsg(resp.already_seeded ? 'already' : 'saved')
+    } catch {
+      setSeedMsg('error')
+    } finally {
+      setSeeding(false)
     }
   }
 
@@ -306,9 +319,29 @@ function AssistantPlaybookPanel() {
           <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
             {rules.map((r, i) => <li key={i}>{r}</li>)}
           </ol>
-          <p style={{ fontSize: 11, color: 'var(--muted)', margin: '10px 0 0' }}>
-            To use this as your own playbook: go to Playbook, create a "Bull Put Spread" setup, and add these as rules.
-          </p>
+          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+            {seedMsg === 'saved' ? (
+              <span style={{ fontSize: 11, color: 'var(--green)' }}>
+                ✓ Saved as Bull Put Spread —{' '}
+                <a href="/playbook" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>View in Playbook</a>
+              </span>
+            ) : seedMsg === 'already' ? (
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                ✓ Already in Playbook —{' '}
+                <a href="/playbook" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>View in Playbook</a>
+              </span>
+            ) : seedMsg === 'error' ? (
+              <span style={{ fontSize: 11, color: 'var(--red)' }}>Could not save — try again.</span>
+            ) : (
+              <button
+                onClick={handleSeed}
+                disabled={seeding || seeded}
+                style={{ background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 5, color: 'var(--accent)', fontSize: 11, padding: '4px 10px', cursor: seeding ? 'not-allowed' : 'pointer', opacity: seeding ? 0.6 : 1 }}
+              >
+                {seeding ? 'Saving…' : 'Save to My Playbook →'}
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>
