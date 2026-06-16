@@ -20,42 +20,42 @@ SP500_UNIVERSE = [
     "SHW","WM","HUM","MCK","MSI","ITW","EMR","NOC","LMT","GD","HCA","PSA",
     "MO","D","APD","ECL","F","GM","UBER","COP","SLB","EOG","MPC","PSX",
     "VLO","OXY","HAL","WFC","USB","PNC","C","TFC","MTB","RF","KEY","SCHW",
-    "MS","BK","COF","DFS","AIG","PRU","MET","TRV","ALL","AFL","HIG","L",
+    "MS","BK","COF","AIG","PRU","MET","TRV","ALL","AFL","HIG","L",
     "PFE","BMY","BIIB","MRNA","ILMN","A","IQV","CRL","IDXX","HOLX",
     "BAX","BDX","COO","DXCM","EW","HSIC","ALGN","RMD","STE","WST",
-    "CTLT","MTD","PODD","TER","ZBRA","CTAS","CINF","LH","DGX","DVA","UHS",
+    "MTD","PODD","TER","ZBRA","CTAS","CINF","LH","DGX","DVA","UHS",
     "THC","CNC","MOH",
-    "T","VZ","TMUS","CHTR","CMCSA","DIS","PARA","WBD","FOX","FOXA",
+    "T","VZ","TMUS","CHTR","CMCSA","DIS","WBD","FOX","FOXA",
     "OMC","IPG","SBAC","AMT","CCI","EQIX","EXR","IRM","ARE","BXP",
     "KIM","REG","FRT","SPG",
     "NEE","AEP","EXC","PCG","ED","AEE","WEC","ETR","PPL","FE","ES","CMS",
     "NI","PNW","XEL","ATO","CNP","NRG","DTE","LNT",
     "AWK","GWW","FAST","ODFL","CHRW","EXPD","UPS","FDX","DAL","UAL","ALK","LUV","AAL",
     "JBHT","SAIA","WERN","KNX","XPO",
-    "TGT","DG","DLTR","ROST","BURL","KSS","M","JWN",
-    "GPS","URBN","ANF","AEO","RL","PVH","CPRI","TPR","HBI","VFC",
-    "FL","CROX","SKX","DECK",
+    "TGT","DG","DLTR","ROST","BURL","KSS","M",
+    "URBN","ANF","AEO","RL","PVH","CPRI","TPR","HBI","VFC",
+    "FL","CROX","DECK",
     "PYPL","SQ","SOFI","LC","UPST",
     "SNOW","DDOG","ZS","NET","CRWD","OKTA","PANW","FTNT","S","VRNS",
-    "NOW","WDAY","TEAM","ADSK","ANSS","PTC","CDNS","MANH","PAYC",
-    "HUBS","PCTY","VEEV","CDAY","ESTC","MDB","DOCN",
+    "NOW","WDAY","TEAM","ADSK","PTC","CDNS","MANH","PAYC",
+    "HUBS","PCTY","VEEV","ESTC","MDB","DOCN",
     "U","RBLX","COIN","MKTX","VIRT","LPLA",
-    "WBA","CVS","RAD","ESRX",
-    "AME","FTV","ROP","IDEX","NDSN","PH","CARR","OTIS","IR","TT","LUK","XYL","A",
-    "KEYS","TRMB","RGEN","FBIN","CPRT","PAYX","AJG","WTW","MMB","MKL",
+    "CVS",
+    "AME","FTV","ROP","IDEX","NDSN","PH","CARR","OTIS","IR","TT","XYL","A",
+    "KEYS","TRMB","RGEN","FBIN","CPRT","PAYX","AJG","WTW","MKL",
     "SWK","SNA","PNR","RRX","GGG","GNRC","EFX","VRSK","BR","FDS","MSCI",
-    "MCO","CBOE","NDAQ","IEX","TW","LPLA","SEIC","NTRS","STT","BEN","IVZ",
-    "TROW","AMG","WDR","FHN","CFG","FITB","HBAN","MTB","ZION","CMA","SIVB",
-    "WAL","EWBC","FCNCA","OFG","GBCI","PACW","CATY","FFIN","HTLF","BPOP",
+    "MCO","CBOE","NDAQ","IEX","TW","SEIC","NTRS","STT","BEN","IVZ",
+    "TROW","AMG","FHN","CFG","FITB","HBAN","MTB","ZION","CMA",
+    "WAL","EWBC","FCNCA","OFG","GBCI","CATY","FFIN","HTLF","BPOP",
     "CBSH","ABCB","SFNC","IBCP","IBOC","TBK","FBIZ","NBTB","NFBK","CTBI",
-    "CCBG","HFWA","BMRC","BSVN","OBNK","BANR","HMNF","OFED","PBIP","SBCF",
-    "PFIS","RNST","SRCE","STBA","TCBK","TBNK","UVSP","WINA","WSFS","HIFS",
-    # Additional liquid S&P 500 names
+    "CCBG","HFWA","BMRC","BSVN","OBNK","BANR","HMNF","OFED","SBCF",
+    "PFIS","RNST","SRCE","STBA","TCBK","UVSP","WINA","WSFS","HIFS",
+    # Additional liquid names
     "AMAT","LRCX","KLAC","MCHP","MPWR","SWKS","QRVO","AKAM","VRT","SMCI",
     "ARM","NXPI","ON","STX","WDC","HPE","HPQ","NTAP","PSTG","PRGO",
-    "BAH","LDOS","SAIC","CACI","MANT","PLTR","AI","BBAI","DXC","CSC",
-    "MTZ","PWR","MYR","STRL","APOG","STRA","LOGI","ROKU","SPOT","SNAP",
-    "PINS","TWLO","ZM","DOCU","BILL","SMAR","TOST","APP","DKNG","DASH",
+    "BAH","LDOS","SAIC","CACI","PLTR","AI","BBAI","DXC",
+    "MTZ","PWR","STRL","APOG","STRA","LOGI","ROKU","SPOT","SNAP",
+    "PINS","TWLO","ZM","DOCU","BILL","TOST","APP","DKNG","DASH",
 ]
 # Deduplicate while preserving order
 _seen: set = set()
@@ -101,7 +101,7 @@ def _batch_eod_snapshots(symbols: list) -> dict:
     snapshots = {}
     for sym in symbols:
         try:
-            df = data[sym].dropna(how="all")
+            df = data[sym].dropna(subset=["Close", "Volume"])
             if len(df) < 21:
                 continue
             closes = df["Close"].tolist()
@@ -109,6 +109,8 @@ def _batch_eod_snapshots(symbols: list) -> dict:
             if len(closes) < 21:
                 continue
             close = float(closes[-1])
+            if math.isnan(close):
+                continue
             sma50 = sum(closes[-50:]) / min(50, len(closes))
             avg_vol_20d = int(sum(volumes[-20:]) / 20)
             diffs = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
