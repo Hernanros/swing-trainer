@@ -137,9 +137,8 @@ def _batch_eod_snapshots(symbols: list) -> dict:
 def stage1_filter(snapshots: dict) -> list:
     """
     Stage 1: technical pre-filter.
-    snapshots: dict keyed by symbol → get_eod_snapshot() output
-    Filters: close > 15, avg_volume_20d > 500_000, close > sma50
-    Returns list of passing snapshot dicts.
+    Filters: close > 15, avg_volume_20d > 500_000, close > sma50, RSI 30-75.
+    Returns top 25 by volume — enough for Claude to score without being overwhelming.
     """
     passed = []
     for sym, snap in snapshots.items():
@@ -152,32 +151,23 @@ def stage1_filter(snapshots: dict) -> list:
         sma50 = snap.get("sma50")
         if sma50 and snap["close"] <= sma50:
             continue
+        rsi = snap.get("rsi14", 50)
+        if rsi < 30 or rsi > 75:
+            continue
         passed.append(snap)
-    return passed
+    passed.sort(key=lambda x: x.get("avg_volume_20d", 0), reverse=True)
+    return passed[:25]
 
 
 # ── Stage 2 Screener ──────────────────────────────────────────────────────────
 
 def stage2_filter(candidates: list, options_provider) -> list:
     """
-    Stage 2: options liquidity filter.
-    Thresholds: ivr >= 20, atm_oi >= 200, atm_spread_pct <= 0.15
-    Enriches each passing candidate with options snapshot fields.
+    Retained for compatibility — no longer used as a filter gate.
+    Options data from yfinance is too unreliable to gate on.
+    Screening is purely technical; options quality is noted by Claude.
     """
-    passed = []
-    for snap in candidates:
-        symbol = snap["symbol"]
-        opts = options_provider.get_options_snapshot(symbol)
-        if opts is None:
-            continue
-        if opts.get("ivr", 0) < 20:
-            continue
-        if opts.get("atm_oi", 0) < 200:
-            continue
-        if opts.get("atm_spread_pct", 1.0) > 0.15:
-            continue
-        passed.append({**snap, **opts})
-    return passed
+    return candidates
 
 
 # ── Claude Haiku Batch Scoring ────────────────────────────────────────────────
@@ -197,16 +187,20 @@ def _build_score_prompt(candidates: list, macro: dict, sectors: list, playbook_r
         f"  {s['symbol']}: {s['label']} ({s.get('pct_vs_20d', 0):+.1f}%)"
         for s in sorted(sectors, key=lambda x: x.get("pct_vs_20d", 0), reverse=True)
     )
-    candidate_blocks = "\n".join(
-        f"<candidate symbol='{c['symbol']}'>\n"
-        f"  sector: {c.get('sector', 'unknown')} ({c.get('sector_label', 'neutral')})\n"
-        f"  close: ${c.get('close', 0):.2f}  sma50: ${c.get('sma50', 0):.2f}\n"
-        f"  rsi14: {c.get('rsi14', 0):.1f}\n"
-        f"  iv: {c.get('iv', 0):.1%}  ivr_proxy: {c.get('ivr', 0):.0f}\n"
-        f"  atm_oi: {c.get('atm_oi', 0)}\n"
-        f"</candidate>"
-        for c in candidates
-    )
+    def _fmt_candidate(c):
+        iv_str = "{:.1%}".format(c["iv"]) if c.get("iv") else "N/A"
+        ivr_str = str(c["ivr"]) if c.get("ivr") else "N/A"
+        oi_str = str(c["atm_oi"]) if c.get("atm_oi") else "N/A"
+        return (
+            f"<candidate symbol='{c['symbol']}'>\n"
+            f"  sector: {c.get('sector', 'unknown')} ({c.get('sector_label', 'neutral')})\n"
+            f"  close: ${c.get('close', 0):.2f}  sma50: ${c.get('sma50', 0):.2f}\n"
+            f"  rsi14: {c.get('rsi14', 0):.1f}\n"
+            f"  iv: {iv_str}  ivr_proxy: {ivr_str}\n"
+            f"  atm_oi: {oi_str}\n"
+            f"</candidate>"
+        )
+    candidate_blocks = "\n".join(_fmt_candidate(c) for c in candidates)
 
     asst_numbered = "\n".join(f"{i+1}. {r}" for i, r in enumerate(BULL_ASSISTANT_PLAYBOOK))
 
@@ -463,7 +457,7 @@ def run_pipeline(options_provider, playbook_rules: list, bull_profile: dict) -> 
     for c in scored:
         atm_strike = c.get("atm_strike", c.get("close", 100))
         spread_width = 5.0   # default; user sets actual strikes when opening trade
-        premium = c.get("iv", 0.3) * spread_width * 0.4  # rough estimate
+        premium = (c.get("iv") or 0.3) * spread_width * 0.4  # rough estimate
         sizing = compute_sizing(atm_strike, spread_width, premium, account_size, risk_pct, max_contracts)
         c.update(sizing)
 
