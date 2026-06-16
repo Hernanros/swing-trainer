@@ -114,5 +114,9 @@ export const api = {
     assistantPlaybook:  ()     => request('GET',  '/bull/assistant-playbook'),
     seedPlaybook:       ()     => request('POST', '/bull/seed-playbook', {}),
   },
+  paperAccount: {
+    get:        ()     => request('GET', '/paper-account'),
+    setBalance: (body) => request('PUT', '/paper-account/balance', body),
+  },
   me: () => request('GET', '/me'),
 }
