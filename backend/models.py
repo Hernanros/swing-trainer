@@ -27,6 +27,7 @@ class User(Base):
     ai_patterns = relationship("AIPattern", back_populates="user", cascade="all, delete-orphan")
     tips = relationship("Tip", back_populates="user", cascade="all, delete-orphan")
     question_mastery = relationship("QuestionMastery", back_populates="user", cascade="all, delete-orphan")
+    paper_account = relationship("PaperAccount", back_populates="user", uselist=False, cascade="all, delete-orphan")
 
     @property
     def active_skills_list(self):
@@ -218,6 +219,16 @@ class BullProfile(Base):
     risk_per_trade_pct = Column(Float, nullable=False, default=1.0)
     max_contracts      = Column(Integer, nullable=False, default=5)
     updated_at         = Column(String, nullable=True)
+
+
+class PaperAccount(Base):
+    __tablename__ = "paper_accounts"
+    id               = Column(Integer, primary_key=True)
+    user_id          = Column(Integer, ForeignKey("users.id"), nullable=False)
+    starting_balance = Column(Float, nullable=False)
+    updated_at       = Column(String, nullable=False)
+
+    user = relationship("User", back_populates="paper_account")
 
 
 class BullScan(Base):
