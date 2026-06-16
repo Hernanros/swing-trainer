@@ -27,6 +27,7 @@ from backend.routers import tips as tips_router
 from backend.routers import curriculum as curriculum_router
 from backend.routers import admin as admin_router
 from backend.routers import bull as bull_router
+from backend.routers import paper_account as paper_account_router
 from backend.auth import require_auth
 
 SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-secret-change-in-production")
@@ -264,6 +265,7 @@ app.include_router(tips_router.router, prefix="/api", dependencies=[Depends(requ
 app.include_router(curriculum_router.router, prefix="/api", dependencies=[Depends(require_auth)])
 app.include_router(admin_router.router)
 app.include_router(bull_router.router, prefix="/api")
+app.include_router(paper_account_router.router, prefix="/api", dependencies=[Depends(require_auth)])
 
 
 @app.get("/health")
