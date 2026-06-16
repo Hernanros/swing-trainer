@@ -161,6 +161,18 @@ async def lifespan(app: FastAPI):
             """))
             conn.commit()
 
+        paper_acct_cols = [row[1] for row in conn.execute(text("PRAGMA table_info(paper_accounts)"))]
+        if not paper_acct_cols:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS paper_accounts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL REFERENCES users(id),
+                    starting_balance REAL NOT NULL,
+                    updated_at TEXT NOT NULL
+                )
+            """))
+            conn.commit()
+
     # ── Daily Bull Scan Scheduler ─────────────────────────────────────────────
     US_MARKET_HOLIDAYS_2026 = {
         "2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03",
