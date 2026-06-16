@@ -67,7 +67,7 @@ _SYMBOL_SECTOR: dict = {
         "AAPL","MSFT","NVDA","AVGO","ORCL","CRM","AMD","TXN","ADBE","INTU","QCOM","IBM",
         "AMAT","LRCX","KLAC","MCHP","MPWR","SWKS","QRVO","NXPI","ON","STX","WDC",
         "HPE","HPQ","NTAP","PSTG","SMCI","ARM","VRT","PLTR","AI","BBAI","DXC","AKAM",
-        "CDNS","MANH","PAYC","HUBS","PCTY","VEEV","ESTC","MDB","DOCN",
+        "CSCO","CDNS","MANH","PAYC","HUBS","PCTY","VEEV","ESTC","MDB","DOCN",
         "SNOW","DDOG","ZS","NET","CRWD","OKTA","PANW","FTNT","S","VRNS",
         "NOW","WDAY","TEAM","ADSK","PTC","KEYS","TRMB","LOGI","TER","ZBRA","BR","EFX","VRSK",
     ]},
@@ -318,8 +318,8 @@ def _parse_scores(xml_text: str, candidates: list) -> list:
     candidate_map = {c["symbol"]: c for c in candidates}
     for match in re.finditer(
         r'<score symbol="([^"]+)" user_total="([^"]+)" asst_total="([^"]+)"[^>]*>'
-        r'\s*<user_rationale>([^<]*)</user_rationale>'
-        r'\s*<asst_rationale>([^<]*)</asst_rationale>',
+        r'\s*<user_rationale>(.*?)</user_rationale>'
+        r'\s*<asst_rationale>(.*?)</asst_rationale>',
         xml_text,
         re.DOTALL,
     ):
