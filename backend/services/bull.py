@@ -61,6 +61,72 @@ SP500_UNIVERSE = [
 _seen: set = set()
 SP500_UNIVERSE = [s for s in SP500_UNIVERSE if not (s in _seen or _seen.add(s))]  # type: ignore[func-returns-value]
 
+# ── Symbol → Sector ETF mapping ───────────────────────────────────────────────
+_SYMBOL_SECTOR: dict = {
+    **{s: "XLK" for s in [
+        "AAPL","MSFT","NVDA","AVGO","ORCL","CRM","AMD","TXN","ADBE","INTU","QCOM","IBM",
+        "AMAT","LRCX","KLAC","MCHP","MPWR","SWKS","QRVO","NXPI","ON","STX","WDC",
+        "HPE","HPQ","NTAP","PSTG","SMCI","ARM","VRT","PLTR","AI","BBAI","DXC","AKAM",
+        "CDNS","MANH","PAYC","HUBS","PCTY","VEEV","ESTC","MDB","DOCN",
+        "SNOW","DDOG","ZS","NET","CRWD","OKTA","PANW","FTNT","S","VRNS",
+        "NOW","WDAY","TEAM","ADSK","PTC","KEYS","TRMB","LOGI","TER","ZBRA","BR","EFX","VRSK",
+    ]},
+    **{s: "XLC" for s in [
+        "GOOGL","GOOG","META","NFLX","DIS","T","VZ","TMUS","CHTR","CMCSA",
+        "WBD","FOX","FOXA","OMC","IPG","APP","SNAP","PINS","RBLX","ROKU",
+        "SPOT","TWLO","DASH","DKNG","ZM","DOCU","BILL","TOST","U",
+    ]},
+    **{s: "XLF" for s in [
+        "JPM","BAC","WFC","MS","GS","C","USB","PNC","TFC","RF","KEY","SCHW",
+        "BK","COF","AIG","PRU","MET","TRV","ALL","AFL","HIG","L",
+        "SPGI","MCO","CBOE","NDAQ","CME","ICE","BLK","AXP","V","MA",
+        "PYPL","SQ","SOFI","LC","UPST","COIN","MKTX","VIRT","LPLA",
+        "FHN","CFG","FITB","HBAN","ZION","CMA","WAL","EWBC","FCNCA","OFG",
+        "GBCI","CATY","FFIN","HTLF","BPOP","CBSH","ABCB","SFNC","IBCP",
+        "IBOC","TBK","FBIZ","NBTB","NFBK","CTBI","CCBG","HFWA","BMRC",
+        "BSVN","OBNK","BANR","HMNF","OFED","SBCF","PFIS","RNST","SRCE",
+        "STBA","TCBK","UVSP","WINA","WSFS","HIFS","TROW","AMG","FDS","MSCI",
+        "NTRS","STT","BEN","IVZ","IEX","TW","AJG","WTW","MKL","MTB","FIS",
+    ]},
+    **{s: "XLV" for s in [
+        "LLY","UNH","JNJ","ABBV","MRK","TMO","ABT","DHR","MDT","AMGN",
+        "VRTX","GILD","ELV","SYK","ISRG","ZTS","BSX","CI","HUM","MCK",
+        "HCA","PFE","BMY","BIIB","MRNA","ILMN","A","IQV","CRL","IDXX",
+        "HOLX","BAX","BDX","COO","DXCM","EW","HSIC","ALGN","RMD","STE",
+        "WST","MTD","PODD","DVA","UHS","THC","CNC","MOH","PRGO","RGEN",
+    ]},
+    **{s: "XLE" for s in [
+        "XOM","CVX","COP","SLB","EOG","MPC","PSX","VLO","OXY","HAL",
+    ]},
+    **{s: "XLY" for s in [
+        "AMZN","TSLA","HD","MCD","COST","LOW","TGT","DG","DLTR","ROST",
+        "BURL","KSS","M","NKE","URBN","ANF","AEO","RL","PVH","CPRI",
+        "TPR","HBI","VFC","FL","CROX","DECK","F","GM","UBER","BKNG",
+    ]},
+    **{s: "XLP" for s in [
+        "PG","KO","PEP","PM","WMT","MO","CL","CVS",
+    ]},
+    **{s: "XLI" for s in [
+        "GE","HON","CAT","DE","RTX","NOC","LMT","GD","EMR","ITW",
+        "ADP","CTAS","FAST","ODFL","CHRW","EXPD","UPS","FDX",
+        "DAL","UAL","ALK","LUV","AAL","JBHT","SAIA","WERN","KNX","XPO",
+        "AME","FTV","ROP","IDEX","NDSN","PH","CARR","OTIS","IR","TT","XYL",
+        "SWK","SNA","PNR","RRX","GGG","GNRC","PAYX",
+        "MTZ","PWR","STRL","BAH","LDOS","SAIC","CACI","WM","GWW","CPRT",
+    ]},
+    **{s: "XLB" for s in [
+        "LIN","APD","ECL","SHW","DD","PPG","NEM","FCX",
+    ]},
+    **{s: "XLRE" for s in [
+        "PLD","PSA","AMT","CCI","EQIX","EXR","IRM","ARE","BXP",
+        "KIM","REG","FRT","SPG","SBAC",
+    ]},
+    **{s: "XLU" for s in [
+        "NEE","AEP","EXC","PCG","ED","AEE","WEC","ETR","PPL","FE",
+        "ES","CMS","NI","PNW","XEL","ATO","CNP","NRG","DTE","LNT","AWK","D","SO","DUK",
+    ]},
+}
+
 
 # ── Bull Assistant's Built-in Playbook ───────────────────────────────────────
 # Concrete rules checkable from EOD + options snapshot data.
@@ -156,7 +222,7 @@ def stage1_filter(snapshots: dict) -> list:
             continue
         passed.append(snap)
     passed.sort(key=lambda x: x.get("avg_volume_20d", 0), reverse=True)
-    return passed[:25]
+    return passed[:15]
 
 
 # ── Stage 2 Screener ──────────────────────────────────────────────────────────
@@ -294,7 +360,7 @@ def score_candidates(candidates: list, macro: dict, sectors: list, playbook_rule
         prompt = _build_score_prompt(candidates, macro, sectors, playbook_rules)
         msg = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=2000,
+            max_tokens=3000,
             messages=[{"role": "user", "content": prompt}],
         )
         return _parse_scores(msg.content[0].text, candidates)
@@ -425,12 +491,8 @@ def run_pipeline(options_provider, playbook_rules: list, bull_profile: dict) -> 
     # 2. Sectors
     sectors = get_sector_etfs()
 
-    # 3. Build sector map for candidate enrichment (symbol → nearest sector ETF)
-    sector_map: dict = {}
-    for sym in SP500_UNIVERSE:
-        for etf in SECTOR_ETFS:
-            sector_map.setdefault(sym, etf)
-            break
+    # 3. Build sector map for candidate enrichment (symbol → sector ETF)
+    sector_map = _SYMBOL_SECTOR  # static mapping; unknown symbols get "unknown" via .get()
 
     # 4. Stage 1: batch fetch EOD snapshots and filter
     raw_snapshots = _batch_eod_snapshots(SP500_UNIVERSE)
