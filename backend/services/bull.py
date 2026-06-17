@@ -467,24 +467,29 @@ def run_pipeline(options_provider, playbook_rules: list, bull_profile: dict) -> 
     Full daily scan pipeline. Returns dict with macro, sectors, candidates.
     Each candidate includes score, rationale, and sizing.
     """
-    from backend.services.market import get_sector_etfs, _fetch_candles, SECTOR_ETFS
+    from backend.services.market import get_sector_etfs, SECTOR_ETFS
 
-    # 1. Macro regime
-    spy_candles = _fetch_candles("SPY", 55)
-    qqq_candles = _fetch_candles("QQQ", 55)
-    spy_closes = [c["close"] for c in spy_candles]
-    qqq_closes = [c["close"] for c in qqq_candles]
-    spy_regime = compute_macro_regime(spy_candles)
-    qqq_regime = compute_macro_regime(qqq_candles)
+    # 1. Macro regime — use yfinance batch (no API keys required, same source as universe)
+    macro_snaps = _batch_eod_snapshots(["SPY", "QQQ"])
+    spy_snap = macro_snaps.get("SPY", {})
+    qqq_snap = macro_snaps.get("QQQ", {})
+
+    def _regime(close: float, sma50: float) -> str:
+        if close > sma50 * 1.005:
+            return "bullish"
+        if close < sma50 * 0.995:
+            return "bearish"
+        return "neutral"
+
     macro = {
         "spy": {
-            "regime": spy_regime,
-            "close": spy_closes[-1] if spy_closes else 0,
-            "sma50": round(sum(spy_closes[-50:]) / 50, 2) if len(spy_closes) >= 50 else 0,
+            "regime": _regime(spy_snap.get("close", 0), spy_snap.get("sma50", 0)),
+            "close": spy_snap.get("close", 0),
+            "sma50": round(spy_snap.get("sma50", 0), 2),
         },
         "qqq": {
-            "regime": qqq_regime,
-            "close": qqq_closes[-1] if qqq_closes else 0,
+            "regime": _regime(qqq_snap.get("close", 0), qqq_snap.get("sma50", 0)),
+            "close": qqq_snap.get("close", 0),
         },
     }
 
