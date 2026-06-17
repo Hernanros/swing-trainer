@@ -154,7 +154,8 @@ def _batch_eod_snapshots(symbols: list) -> dict:
         import yfinance as yf
         data = yf.download(
             tickers=symbols,
-            period="3mo",
+            period="6mo",
+            interval="1d",
             group_by="ticker",
             auto_adjust=True,
             progress=False,
@@ -168,7 +169,7 @@ def _batch_eod_snapshots(symbols: list) -> dict:
     for sym in symbols:
         try:
             df = data[sym].dropna(subset=["Close", "Volume"])
-            if len(df) < 21:
+            if len(df) < 50:
                 continue
             closes = df["Close"].tolist()
             volumes = df["Volume"].tolist()
@@ -215,7 +216,11 @@ def stage1_filter(snapshots: dict) -> list:
         if (snap.get("avg_volume_20d") or 0) < 500_000:
             continue
         sma50 = snap.get("sma50")
-        if sma50 and snap["close"] <= sma50:
+        if not sma50 or snap["close"] <= sma50:
+            continue
+        # Reject overextended stocks (>20% above SMA50 = too risky for credit spread
+        # OR indicates bad data from yfinance batch download)
+        if snap["close"] > sma50 * 1.20:
             continue
         rsi = snap.get("rsi14", 50)
         if rsi < 30 or rsi > 75:
