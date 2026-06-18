@@ -339,146 +339,57 @@ def stage1_filter(snapshots: dict) -> list:
 
 # ── Stage 2 Screener ──────────────────────────────────────────────────────────
 
-def stage2_filter(candidates: list, options_provider) -> list:
+def stage2_options_check(candidates: list, options_provider) -> list:
     """
-    Retained for compatibility — no longer used as a filter gate.
-    Options data from yfinance is too unreliable to gate on.
-    Screening is purely technical; options quality is noted by Claude.
+    Stage 2: per-ticker options quality check using OptionsProvider interface.
+    Assigns data_quality: 'complete' (bid>=0.30 + oi>=200), 'partial', or 'price_only'.
+    Returns candidates sorted: complete first, partial second, price_only last.
     """
-    return candidates
+    result = []
+    for c in candidates:
+        sym = c["symbol"]
+        close = float(c.get("close") or 100.0)
+        expiry = options_provider.get_nearest_weekly_expiry(sym)
+        if expiry is None:
+            result.append({**c, "data_quality": "price_only"})
+            continue
+        chain = options_provider.get_chain(sym, expiry)
+        puts = chain.get("puts", [])
+        if not puts:
+            result.append({**c, "data_quality": "price_only", "expiry": expiry})
+            continue
+        atm = min(puts, key=lambda p: abs(p["strike"] - close))
+        atm_bid = float(atm.get("bid") or 0.0)
+        atm_oi = int(atm.get("oi") or 0)
+        atm_iv = float(atm.get("iv") or 0.0)
+        if atm_bid >= 0.30 and atm_oi >= 200:
+            data_quality = "complete"
+        elif atm_iv > 0 or atm_bid > 0:
+            data_quality = "partial"
+        else:
+            data_quality = "price_only"
+        result.append({
+            **c,
+            "data_quality": data_quality,
+            "expiry": expiry,
+            "short_strike": atm["strike"],
+            "long_strike": round(atm["strike"] - 5, 2),
+            "atm_bid": atm_bid,
+            "atm_oi": atm_oi,
+            "atm_iv": atm_iv,
+            "estimated_credit": round(atm_bid * 0.85, 2),
+        })
+        complete_count = sum(1 for r in result if r.get("data_quality") == "complete")
+        if complete_count >= 8:
+            break
+    quality_order = {"complete": 0, "partial": 1, "price_only": 2}
+    result.sort(key=lambda x: quality_order.get(x.get("data_quality", "price_only"), 2))
+    return result
 
 
 # ── Claude Haiku Batch Scoring ────────────────────────────────────────────────
 
 _api_key = os.getenv("ANTHROPIC_API_KEY", "")
-
-
-def _build_score_prompt(candidates: list, macro: dict, sectors: list, playbook_rules: list) -> str:
-    spy = macro.get("spy", {})
-    qqq = macro.get("qqq", {})
-    macro_text = (
-        f"SPY: {spy.get('regime', 'unknown')} "
-        f"(close ${spy.get('close', 0):.2f} vs 50d SMA ${spy.get('sma50', 0):.2f})\n"
-        f"QQQ: {qqq.get('regime', 'unknown')}"
-    )
-    sector_lines = "\n".join(
-        f"  {s['symbol']}: {s['label']} ({s.get('pct_vs_20d', 0):+.1f}%)"
-        for s in sorted(sectors, key=lambda x: x.get("pct_vs_20d", 0), reverse=True)
-    )
-    def _fmt_candidate(c):
-        iv_str = "{:.1%}".format(c["iv"]) if c.get("iv") else "N/A"
-        ivr_str = str(c["ivr"]) if c.get("ivr") else "N/A"
-        oi_str = str(c["atm_oi"]) if c.get("atm_oi") else "N/A"
-        return (
-            f"<candidate symbol='{c['symbol']}'>\n"
-            f"  sector: {c.get('sector', 'unknown')} ({c.get('sector_label', 'neutral')})\n"
-            f"  close: ${c.get('close', 0):.2f}  sma50: ${c.get('sma50', 0):.2f}\n"
-            f"  rsi14: {c.get('rsi14', 0):.1f}\n"
-            f"  iv: {iv_str}  ivr_proxy: {ivr_str}\n"
-            f"  atm_oi: {oi_str}\n"
-            f"</candidate>"
-        )
-    candidate_blocks = "\n".join(_fmt_candidate(c) for c in candidates)
-
-    asst_numbered = "\n".join(f"{i+1}. {r}" for i, r in enumerate(BULL_ASSISTANT_PLAYBOOK))
-
-    if playbook_rules:
-        user_numbered = "\n".join(f"{i+1}. {r}" for i, r in enumerate(playbook_rules))
-        user_block = f"""USER PLAYBOOK (score as user_total):
-{user_numbered}
-
-Score 0-10: (rules clearly met) / (total rules) × 10.
-In user_rationale mark each rule ✓ met / ✗ not met / ? unclear, then state the score.
-Example: "RSI=52 ✓ rule 1. Above SMA50 ✓ rule 2. IV=18 ✗ rule 3. Score 6.7/10."
-Only use data provided. Do NOT invent criteria."""
-    else:
-        user_block = "USER PLAYBOOK: none saved. Set user_total=\"—\" and user_rationale=\"No playbook rules — add rules in the Playbook page.\""
-
-    return f"""You are a swing trading assistant evaluating bull put spread candidates using EOD closing data.
-
-MARKET CONTEXT:
-{macro_text}
-
-SECTOR RANKINGS (strongest first):
-{sector_lines}
-
-Score each candidate against TWO playbooks:
-
-{user_block}
-
-BULL ASSISTANT PLAYBOOK (score as asst_total):
-{asst_numbered}
-
-Score 0-10: (rules clearly met) / 6 × 10.
-In asst_rationale mark each rule ✓ met / ✗ not met / ? unclear, then state the score.
-
-CANDIDATES:
-{candidate_blocks}
-
-Respond in this EXACT XML format (include ALL candidates):
-<scores>
-<score symbol="SYMBOL" user_total="7.5" asst_total="8.3">
-<user_rationale>Per-rule verdict for user playbook.</user_rationale>
-<asst_rationale>Per-rule verdict for assistant playbook.</asst_rationale>
-</score>
-</scores>"""
-
-
-def _parse_scores(xml_text: str, candidates: list) -> list:
-    import re
-    results = []
-    candidate_map = {c["symbol"]: c for c in candidates}
-    for match in re.finditer(
-        r'<score symbol="([^"]+)" user_total="([^"]+)" asst_total="([^"]+)"[^>]*>'
-        r'\s*<user_rationale>(.*?)</user_rationale>'
-        r'\s*<asst_rationale>(.*?)</asst_rationale>',
-        xml_text,
-        re.DOTALL,
-    ):
-        sym = match.group(1)
-        if sym not in candidate_map:
-            continue
-        candidate = dict(candidate_map[sym])
-        user_raw = match.group(2).strip()
-        try:
-            candidate["score"] = float(user_raw)
-        except (ValueError, AttributeError):
-            candidate["score"] = None
-        try:
-            candidate["asst_score"] = float(match.group(3))
-        except ValueError:
-            candidate["asst_score"] = 0.0
-        candidate["rationale"] = match.group(4).strip()
-        candidate["asst_rationale"] = match.group(5).strip()
-        results.append(candidate)
-    scored_syms = {r["symbol"] for r in results}
-    for c in candidates:
-        if c["symbol"] not in scored_syms:
-            results.append({**c, "score": None, "asst_score": 0.0,
-                            "rationale": "Not scored.", "asst_rationale": "Not scored."})
-    return sorted(results, key=lambda x: x.get("asst_score") or 0, reverse=True)
-
-
-def score_candidates(candidates: list, macro: dict, sectors: list, playbook_rules: list) -> list:
-    """
-    Score candidates via Claude Haiku. Returns list sorted by score descending.
-    Gracefully returns candidates with score=0 when ANTHROPIC_API_KEY is absent.
-    """
-    if not _api_key:
-        return [{**c, "score": 0.0, "rationale": "[Scoring unavailable — set ANTHROPIC_API_KEY]"} for c in candidates]
-    try:
-        from anthropic import Anthropic
-        client = Anthropic(api_key=_api_key)
-        prompt = _build_score_prompt(candidates, macro, sectors, playbook_rules)
-        msg = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=3000,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return _parse_scores(msg.content[0].text, candidates)
-    except Exception as e:
-        _log.error("Bull scoring failed: %s", e)
-        return [{**c, "score": 0.0, "rationale": f"[Scoring error: {e}]"} for c in candidates]
 
 
 # ── Position Sizing ───────────────────────────────────────────────────────────
@@ -576,12 +487,18 @@ def chat(question: str, scan_context: dict, context_symbol: Optional[str]) -> st
 
 def run_pipeline(options_provider, playbook_rules: list, bull_profile: dict) -> dict:
     """
-    Full daily scan pipeline. Returns dict with macro, sectors, candidates.
-    Each candidate includes score, rationale, and sizing.
+    Full daily scan pipeline.
+    Stage 1: channel + RSI slope filter (top 20).
+    Stage 2: options quality check (data_quality flags).
+    Scoring: deterministic 0-100 (no Claude Haiku).
+    Briefs: Claude Sonnet per complete candidate (parallel).
+    Returns {macro, sectors, candidates}.
     """
-    from backend.services.market import get_sector_etfs, SECTOR_ETFS
+    import concurrent.futures
+    from backend.services.market import get_sector_etfs
+    from backend.services.claude import generate_setup_brief
 
-    # 1. Macro regime — use yfinance batch (no API keys required, same source as universe)
+    # 1. Macro regime
     macro_snaps = _batch_eod_snapshots(["SPY", "QQQ"])
     spy_snap = macro_snaps.get("SPY", {})
     qqq_snap = macro_snaps.get("QQQ", {})
@@ -607,40 +524,51 @@ def run_pipeline(options_provider, playbook_rules: list, bull_profile: dict) -> 
 
     # 2. Sectors
     sectors = get_sector_etfs()
+    sector_label_map = {s["symbol"]: s["label"] for s in sectors}
 
-    # 3. Build sector map for candidate enrichment (symbol → sector ETF)
-    sector_map = _SYMBOL_SECTOR  # static mapping; unknown symbols get "unknown" via .get()
-
-    # 4. Stage 1: batch fetch EOD snapshots and filter
+    # 3. Stage 1: batch snapshot + channel filter → top 20
     raw_snapshots = _batch_eod_snapshots(SP500_UNIVERSE)
     stage1 = stage1_filter(raw_snapshots)
 
-    # 5. Stage 2: options liquidity filter
-    stage2 = stage2_filter(stage1, options_provider)
-
-    # 6. Enrich with sector label
-    sector_label_map = {s["symbol"]: s["label"] for s in sectors}
-    for c in stage2:
-        c_sector = sector_map.get(c["symbol"], "unknown")
+    # 4. Enrich with sector info
+    for c in stage1:
+        c_sector = _SYMBOL_SECTOR.get(c["symbol"], "unknown")
         c["sector"] = c_sector
         c["sector_label"] = sector_label_map.get(c_sector, "neutral")
 
-    # 7. Score via Claude Haiku
-    scored = score_candidates(stage2, macro, sectors, playbook_rules)
+    # 5. Stage 2: options quality check
+    candidates = stage2_options_check(stage1, options_provider)
 
-    # 8. Attach sizing to each candidate
+    # 6. Deterministic scoring
+    for c in candidates:
+        c["score"] = deterministic_score(c, macro)
+    candidates.sort(key=lambda x: x.get("score", 0), reverse=True)
+
+    # 7. Setup briefs for complete candidates (parallel Sonnet calls)
+    complete = [c for c in candidates if c.get("data_quality") == "complete"]
+
+    def _brief(c):
+        return c["symbol"], generate_setup_brief(c, macro, sectors)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        briefs = dict(executor.map(_brief, complete))
+
+    for c in candidates:
+        c["setup_brief"] = briefs.get(c["symbol"], "")
+
+    # 8. Attach position sizing
     profile = bull_profile or {}
     account_size = float(profile.get("account_size", 0))
     risk_pct = float(profile.get("risk_per_trade_pct", 1.0))
     max_contracts = int(profile.get("max_contracts", 5))
-    for c in scored:
-        atm_strike = c.get("atm_strike", c.get("close", 100))
-        spread_width = 5.0   # default; user sets actual strikes when opening trade
-        premium = (c.get("iv") or 0.3) * spread_width * 0.4  # rough estimate
-        sizing = compute_sizing(atm_strike, spread_width, premium, account_size, risk_pct, max_contracts)
+    for c in candidates:
+        spread_width = (c.get("short_strike") or 0) - (c.get("long_strike") or 0)
+        premium = float(c.get("estimated_credit") or 0)
+        atm_strike = float(c.get("short_strike") or c.get("close") or 100)
+        sizing = compute_sizing(atm_strike, spread_width or 5.0, premium, account_size, risk_pct, max_contracts)
         c.update(sizing)
 
-    return _sanitize({"macro": macro, "sectors": sectors, "candidates": scored})
+    return _sanitize({"macro": macro, "sectors": sectors, "candidates": candidates})
 
 
 def _sanitize(obj):

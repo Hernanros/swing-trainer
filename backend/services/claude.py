@@ -387,3 +387,8 @@ def generate_pattern_analysis(context: str) -> list:
     if not patterns:
         raise ValueError("No valid patterns parsed from Claude response")
     return patterns
+
+
+def generate_setup_brief(candidate: dict, macro: dict, sectors: list) -> str:
+    """Stub — replaced by full implementation in Task 7."""
+    return f"[Setup brief — {candidate.get('symbol', '?')}]"

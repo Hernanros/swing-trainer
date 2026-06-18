@@ -295,3 +295,89 @@ def test_stage1_filter_excludes_failed_channel():
         bull_svc._channel_proximity = original_cp
         bull_svc._rsi_slope = original_rs
     assert result == []
+
+
+# ── Task 6: stage2_options_check + run_pipeline ────────────────────────────────
+
+def test_stage2_options_check_complete_quality():
+    from backend.services.bull import stage2_options_check
+    candidate = {"symbol": "AAPL", "close": 185.0, "channel_proximity_pct": 0.1, "rsi_slope": 1.2}
+    mock_provider = MagicMock()
+    mock_provider.get_nearest_weekly_expiry.return_value = "2026-07-11"
+    mock_provider.get_chain.return_value = {
+        "strikes": [180.0, 185.0, 190.0],
+        "puts": [
+            {"strike": 185.0, "bid": 0.90, "ask": 1.00, "oi": 600, "iv": 0.30},
+        ],
+    }
+    result = stage2_options_check([candidate], mock_provider)
+    assert len(result) == 1
+    assert result[0]["data_quality"] == "complete"
+    assert result[0]["short_strike"] == 185.0
+    assert result[0]["long_strike"] == 180.0
+    assert result[0]["estimated_credit"] == round(0.90 * 0.85, 2)
+
+
+def test_stage2_options_check_price_only_when_no_expiry():
+    from backend.services.bull import stage2_options_check
+    candidate = {"symbol": "NOEXP", "close": 100.0}
+    mock_provider = MagicMock()
+    mock_provider.get_nearest_weekly_expiry.return_value = None
+    result = stage2_options_check([candidate], mock_provider)
+    assert result[0]["data_quality"] == "price_only"
+
+
+def test_stage2_options_check_partial_quality_when_bid_too_low():
+    from backend.services.bull import stage2_options_check
+    candidate = {"symbol": "LOWBID", "close": 50.0}
+    mock_provider = MagicMock()
+    mock_provider.get_nearest_weekly_expiry.return_value = "2026-07-11"
+    mock_provider.get_chain.return_value = {
+        "strikes": [50.0],
+        "puts": [{"strike": 50.0, "bid": 0.10, "ask": 0.15, "oi": 50, "iv": 0.20}],
+    }
+    result = stage2_options_check([candidate], mock_provider)
+    assert result[0]["data_quality"] == "partial"
+
+
+def test_run_pipeline_returns_expected_shape(monkeypatch):
+    import backend.services.bull as bull_svc
+    import backend.services.market as mkt
+
+    fake_snap = {
+        "symbol": "AAPL", "close": 185.0, "sma50": 175.0, "rsi14": 52.0,
+        "volume": 2_000_000.0, "avg_volume_20d": 1_500_000,
+        "closes": [180.0 + i * 0.3 for i in range(25)],
+        "highs": [183.0 + i * 0.3 for i in range(20)],
+        "lows": [177.0 + i * 0.3 for i in range(20)],
+    }
+    monkeypatch.setattr(bull_svc, "_batch_eod_snapshots", lambda syms: {"AAPL": fake_snap} if "AAPL" in syms or syms == ["SPY", "QQQ"] else {"SPY": {**fake_snap, "symbol": "SPY"}, "QQQ": {**fake_snap, "symbol": "QQQ"}})
+    monkeypatch.setattr(mkt, "get_sector_etfs", lambda: [{"symbol": "XLK", "label": "strong", "pct_vs_20d": 1.2}])
+    monkeypatch.setattr(bull_svc, "SP500_UNIVERSE", ["AAPL"])
+    monkeypatch.setattr(bull_svc, "_channel_proximity", lambda c, h, l: {"slope": 0.3, "proximity_pct": 0.10, "passes": True})
+    monkeypatch.setattr(bull_svc, "_rsi_slope", lambda c: 1.5)
+
+    mock_provider = MagicMock()
+    mock_provider.get_nearest_weekly_expiry.return_value = "2026-07-11"
+    mock_provider.get_chain.return_value = {
+        "strikes": [185.0],
+        "puts": [{"strike": 185.0, "bid": 0.90, "ask": 1.00, "oi": 600, "iv": 0.30}],
+    }
+
+    with patch("backend.services.claude.generate_setup_brief", return_value="Test brief."):
+        result = bull_svc.run_pipeline(
+            options_provider=mock_provider,
+            playbook_rules=[],
+            bull_profile={"account_size": 25000.0, "risk_per_trade_pct": 1.0, "max_contracts": 5},
+        )
+
+    assert "macro" in result
+    assert "sectors" in result
+    assert "candidates" in result
+    candidates = result["candidates"]
+    assert len(candidates) >= 1
+    c = candidates[0]
+    assert "score" in c
+    assert "data_quality" in c
+    assert "setup_brief" in c
+    assert isinstance(c["score"], int)
