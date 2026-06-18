@@ -71,11 +71,40 @@ def call_claude(prompt: str, max_tokens: int = 1000) -> str:
 
 
 def _build_debrief_prompt(trade, rule_detail: Optional[dict] = None, coaching_context: str = "", playbook_rules: list = None) -> str:
-    followed_str = ", ".join(rule_detail["followed"]) if rule_detail and rule_detail.get("followed") else "none recorded"
-    violated_str = ", ".join(rule_detail["violated"]) if rule_detail and rule_detail.get("violated") else "none recorded"
-
     pnl_str = f"${trade.pnl:.2f}" if trade.pnl is not None else "N/A"
     r_str   = f"{trade.r_multiple:.2f}R" if trade.r_multiple is not None else "?R"
+
+    # Build compliance block from checklist self-assessment.
+    # The trader's self-report is authoritative — do not override it with independent inference.
+    if rule_detail:
+        followed = rule_detail.get("followed") or []
+        violated = rule_detail.get("violated") or []
+        if followed and not violated:
+            compliance_block = (
+                f"- Plan adherence score: {f'{trade.checklist_score:.0f}%' if trade.checklist_score is not None else '100%'}\n"
+                f"- Trader confirmed following ALL rules: {', '.join(followed)}\n"
+                f"IMPORTANT: The trader followed their full playbook on this trade. "
+                f"Acknowledge this in paragraph 1. Do not question or second-guess it."
+            )
+        elif violated:
+            followed_str = ", ".join(followed) if followed else "none"
+            violated_str = ", ".join(violated)
+            compliance_block = (
+                f"- Plan adherence score: {f'{trade.checklist_score:.0f}%' if trade.checklist_score is not None else 'N/A'}\n"
+                f"- Rules trader confirmed following: {followed_str}\n"
+                f"- Rules trader self-reported NOT following: {violated_str}\n"
+                f"Trust this self-assessment. For each violated rule mention the consequence once, briefly, then move on."
+            )
+        else:
+            compliance_block = (
+                f"- Plan adherence score: N/A (checklist submitted but no items recorded)\n"
+                f"Do not assess rule compliance — focus on trade structure and outcome."
+            )
+    else:
+        compliance_block = (
+            "- No checklist submitted.\n"
+            "Do not assess or infer rule compliance from the trade data — focus on trade structure and outcome only."
+        )
 
     if (trade.trade_type or "equity") == "option_spread":
         long_s   = trade.option_long_strike  or 0.0
@@ -99,36 +128,34 @@ def _build_debrief_prompt(trade, rule_detail: Optional[dict] = None, coaching_co
             f"- P&L: {pnl_str} ({r_str} vs max risk)\n"
             f"- Max risk: ${max_loss} | Max profit: ${max_profit}\n"
             f"- Setup type: {trade.setup_type or 'Not specified'}\n"
-            f"- Plan adherence score: {f'{trade.checklist_score:.0f}%' if trade.checklist_score is not None else 'N/A'}\n"
-            f"- Rules followed: {followed_str}\n"
-            f"- Rules violated: {violated_str}\n"
-            f"- Pre-trade note: {trade.pre_note or 'None'}"
+            f"- Pre-trade note: {trade.pre_note or 'None'}\n"
+            f"{compliance_block}"
         )
         if getattr(trade, 'pre_trade_advisory', None):
             trade_block += f"\n- Pre-trade advisory: {trade.pre_trade_advisory}"
         paragraphs = (
             "Write exactly 4 short paragraphs:\n"
-            "1. Plan adherence — did the spread selection and setup match the pre-trade note and checklist?\n"
+            "1. Plan adherence — acknowledge what the trader got right based on their self-reported checklist; "
+            "if rules were violated, state the consequence once without lecturing.\n"
             "2. Spread structure — were the strikes, expiry, and premium appropriate for the thesis?\n"
             "3. Risk management — was position size appropriate relative to max risk, and was the trade managed well?\n"
             "4. Key lesson — one specific, actionable observation from this trade."
         )
         if getattr(trade, 'pre_trade_advisory', None):
-            paragraphs += "\n\nPre-trade advisory given:\n" + trade.pre_trade_advisory + "\n\nIn paragraph 1, briefly compare whether the outcome matched the advisory's expectations."
+            paragraphs += "\n\nIn paragraph 1, briefly compare whether the outcome matched the pre-trade advisory."
     else:
         trade_block = (
             f"- Symbol: {trade.symbol} | Direction: {trade.direction}\n"
             f"- Entry: ${trade.entry} | Stop: ${trade.stop} | Target: ${trade.target} | Exit: ${trade.exit}\n"
             f"- Shares: {trade.shares} | P&L: {pnl_str} ({r_str})\n"
             f"- Setup type: {trade.setup_type or 'Not specified'}\n"
-            f"- Plan adherence score: {f'{trade.checklist_score:.0f}%' if trade.checklist_score is not None else 'N/A'}\n"
-            f"- Rules followed: {followed_str}\n"
-            f"- Rules violated: {violated_str}\n"
-            f"- Pre-trade note: {trade.pre_note or 'None'}"
+            f"- Pre-trade note: {trade.pre_note or 'None'}\n"
+            f"{compliance_block}"
         )
         paragraphs = (
             "Write exactly 4 short paragraphs:\n"
-            "1. Plan adherence — did the trade match the pre-trade note and checklist?\n"
+            "1. Plan adherence — acknowledge what the trader got right based on their self-reported checklist; "
+            "if rules were violated, state the consequence once without lecturing.\n"
             "2. Entry quality — was entry precise and well-timed?\n"
             "3. Risk management — was the stop structural, sized correctly, and honoured?\n"
             "4. Key lesson — one specific, actionable observation from this trade."
@@ -137,16 +164,17 @@ def _build_debrief_prompt(trade, rule_detail: Optional[dict] = None, coaching_co
     context_block = f"\nStudent context:\n{coaching_context}\n" if coaching_context else ""
     if playbook_rules:
         rules_text = "\n".join(f"- [{r.tier.upper()}] {r.text}" for r in playbook_rules)
-        rules_block = f"\nPlaybook rules for this setup ({trade.setup_type}):\n{rules_text}\n"
+        rules_block = f"\nPlaybook rules for this setup ({trade.setup_type}) — for reference only, do NOT re-evaluate compliance independently:\n{rules_text}\n"
     else:
         rules_block = ""
     prompt = (
-        f"You are a professional swing trading coach. Analyze this trade and write a concise debrief."
+        f"You are a supportive but honest swing trading coach. Write a concise debrief that helps the trader improve."
         f"{context_block}"
         f"{rules_block}\n"
         f"Trade:\n{trade_block}\n\n"
         f"{paragraphs}\n\n"
-        f"Evaluate the trade against the playbook rules above. Be direct and specific. No generic advice."
+        f"Be specific and constructive. The checklist self-assessment is the authoritative record of plan adherence — "
+        f"do not override it. No generic advice. No moralizing."
     )
     return prompt
 

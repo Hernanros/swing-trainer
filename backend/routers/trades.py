@@ -260,8 +260,9 @@ def close_trade(
         if scoreable:
             checked_count = sum(1 for i in scoreable if i["checked"])
             trade.checklist_score = round(checked_count / len(scoreable) * 100, 1)
+        # Only must/should rules count as violated when unchecked — context rules are informational
         followed = [rule_map[i["rule_id"]] for i in body.checklist_items if i["checked"] and i["rule_id"] in rule_map]
-        violated = [rule_map[i["rule_id"]] for i in body.checklist_items if not i["checked"] and i["rule_id"] in rule_map]
+        violated = [rule_map[i["rule_id"]] for i in body.checklist_items if not i["checked"] and i["tier"] in ("must", "should") and i["rule_id"] in rule_map]
         rule_detail = {"followed": followed, "violated": violated}
 
     db.commit()
