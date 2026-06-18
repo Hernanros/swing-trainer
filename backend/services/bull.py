@@ -169,6 +169,32 @@ def _channel_proximity(closes: list, highs: list, lows: list) -> dict:
     return {"slope": channel_slope, "proximity_pct": proximity_pct, "passes": passes}
 
 
+def _channel_context_60d(closes: list, highs: list, lows: list) -> dict:
+    """
+    60-day channel sanity gate. Prevents the 20-day channel from firing on a
+    breakout anomaly: a stock in the top half of its 60-day channel is extended,
+    not at support, regardless of where the 20-day lower band sits.
+    Returns {slope: float, proximity_pct: float, passes_gate: bool}.
+    passes_gate: True only when 60d slope > 0 AND close is in bottom 50% of 60d channel.
+    If fewer than 60 bars available, passes_gate = True (graceful fallback to 20d only).
+    """
+    import numpy as np
+    if len(highs) < 60 or len(lows) < 60 or len(closes) < 60:
+        return {"slope": 0.0, "proximity_pct": 0.5, "passes_gate": True}
+    x = list(range(60))
+    upper_coef = np.polyfit(x, highs[-60:], 1)
+    lower_coef = np.polyfit(x, lows[-60:], 1)
+    channel_slope = float(lower_coef[0])
+    lower_val = float(np.polyval(lower_coef, 59))
+    upper_val = float(np.polyval(upper_coef, 59))
+    channel_range = upper_val - lower_val
+    if channel_range <= 0:
+        return {"slope": channel_slope, "proximity_pct": 0.5, "passes_gate": False}
+    proximity_pct = float((closes[-1] - lower_val) / channel_range)
+    passes_gate = channel_slope > 0 and proximity_pct <= 0.50
+    return {"slope": channel_slope, "proximity_pct": proximity_pct, "passes_gate": passes_gate}
+
+
 def _rsi_slope(closes: list) -> float:
     """
     Returns the slope of RSI(14) over the last 3 bars (change per bar).
@@ -288,9 +314,9 @@ def _batch_eod_snapshots(symbols: list) -> dict:
                 "rsi14": rsi14,
                 "volume": float(volumes[-1]),
                 "avg_volume_20d": avg_vol_20d,
-                "closes": [float(c) for c in closes[-25:]],
-                "highs": [float(h) for h in highs[-20:]],
-                "lows": [float(l) for l in lows[-20:]],
+                "closes": [float(c) for c in closes[-65:]],
+                "highs": [float(h) for h in highs[-65:]],
+                "lows": [float(l) for l in lows[-65:]],
             }
         except Exception:
             continue
@@ -321,6 +347,9 @@ def stage1_filter(snapshots: dict) -> list:
             continue
         channel = _channel_proximity(closes, highs, lows)
         if not channel["passes"]:
+            continue
+        ctx60 = _channel_context_60d(closes, highs, lows)
+        if not ctx60["passes_gate"]:
             continue
         rsi_slope_val = _rsi_slope(closes)
         if rsi_slope_val <= 0:
