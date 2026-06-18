@@ -142,6 +142,56 @@ BULL_ASSISTANT_PLAYBOOK = [
 ]
 
 
+# ── Channel + RSI slope helpers ───────────────────────────────────────────────
+
+def _channel_proximity(closes: list, highs: list, lows: list) -> dict:
+    """
+    Fits linear regression on 20-day highs and lows to detect channel direction
+    and how close the current price is to the lower band.
+    Returns {slope: float, proximity_pct: float, passes: bool}.
+    proximity_pct: 0 = at lower band, 1 = at upper band.
+    passes: slope > 0 and proximity_pct <= 0.25.
+    """
+    import numpy as np
+    if len(highs) < 20 or len(lows) < 20 or len(closes) < 20:
+        return {"slope": 0.0, "proximity_pct": 0.5, "passes": False}
+    x = list(range(20))
+    upper_coef = np.polyfit(x, highs[-20:], 1)
+    lower_coef = np.polyfit(x, lows[-20:], 1)
+    channel_slope = float(lower_coef[0])
+    lower_val = float(np.polyval(lower_coef, 19))
+    upper_val = float(np.polyval(upper_coef, 19))
+    channel_range = upper_val - lower_val
+    if channel_range <= 0:
+        return {"slope": channel_slope, "proximity_pct": 0.5, "passes": False}
+    proximity_pct = float((closes[-1] - lower_val) / channel_range)
+    passes = channel_slope > 0 and proximity_pct <= 0.25
+    return {"slope": channel_slope, "proximity_pct": proximity_pct, "passes": passes}
+
+
+def _rsi_slope(closes: list) -> float:
+    """
+    Returns the slope of RSI(14) over the last 3 bars (change per bar).
+    Positive means RSI is turning upward. Returns 0.0 if fewer than 22 bars.
+    """
+    if len(closes) < 22:
+        return 0.0
+
+    def _rsi14(series: list) -> float:
+        diffs = [series[i] - series[i - 1] for i in range(1, len(series))]
+        gains = [max(d, 0.0) for d in diffs[-14:]]
+        losses = [max(-d, 0.0) for d in diffs[-14:]]
+        avg_gain = sum(gains) / 14
+        avg_loss = sum(losses) / 14
+        if avg_loss == 0:
+            return 100.0
+        return 100.0 - 100.0 / (1 + avg_gain / avg_loss)
+
+    rsi_t0 = _rsi14(closes[:-2])   # 2 bars ago
+    rsi_t2 = _rsi14(closes)         # today
+    return (rsi_t2 - rsi_t0) / 2    # slope: change per bar
+
+
 # ── Batch EOD Snapshot (yfinance) ────────────────────────────────────────────
 
 def _batch_eod_snapshots(symbols: list) -> dict:

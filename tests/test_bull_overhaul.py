@@ -117,3 +117,62 @@ def test_get_chain_estimates_iv_when_zero():
         result = provider.get_chain("TEST", expiry)
     atm = result["puts"][0]
     assert atm["iv"] > 0, "Should estimate IV from bid/ask mid via B-S approximation"
+
+
+# ── Task 4: _channel_proximity, _rsi_slope ─────────────────────────────────────
+
+def test_channel_proximity_passes_near_lower_band():
+    from backend.services.bull import _channel_proximity
+    highs = [100 + i * 0.5 for i in range(20)]
+    lows  = [95  + i * 0.5 for i in range(20)]
+    closes = lows[:]
+    closes[-1] = lows[-1] + 0.5
+    result = _channel_proximity(closes, highs, lows)
+    assert result["passes"] is True
+    assert result["slope"] > 0
+    assert result["proximity_pct"] < 0.25
+
+
+def test_channel_proximity_fails_near_upper_band():
+    from backend.services.bull import _channel_proximity
+    highs = [100 + i * 0.5 for i in range(20)]
+    lows  = [90  + i * 0.5 for i in range(20)]
+    closes = highs[:]
+    result = _channel_proximity(closes, highs, lows)
+    assert result["passes"] is False
+    assert result["proximity_pct"] > 0.25
+
+
+def test_channel_proximity_fails_downward_channel():
+    from backend.services.bull import _channel_proximity
+    highs = [100 - i * 0.5 for i in range(20)]
+    lows  = [90  - i * 0.5 for i in range(20)]
+    closes = [95  - i * 0.5 for i in range(20)]
+    result = _channel_proximity(closes, highs, lows)
+    assert result["passes"] is False
+    assert result["slope"] < 0
+
+
+def test_rsi_slope_positive_for_rising_prices():
+    from backend.services.bull import _rsi_slope
+    # Small losses early, then strong gains late → recent 14-bar window has
+    # more gains than the window 2 bars earlier → RSI increases → slope > 0.
+    closes = [100 - i * 0.1 for i in range(15)] + [98.5 + i * 1.0 for i in range(10)]
+    slope = _rsi_slope(closes)
+    assert slope > 0
+
+
+def test_rsi_slope_negative_for_falling_prices():
+    from backend.services.bull import _rsi_slope
+    # Small gains early, then strong losses late → recent 14-bar window has
+    # more losses than the window 2 bars earlier → RSI decreases → slope < 0.
+    closes = [100 + i * 0.1 for i in range(15)] + [101.4 - i * 1.0 for i in range(10)]
+    slope = _rsi_slope(closes)
+    assert slope < 0
+
+
+def test_rsi_slope_returns_zero_when_insufficient_data():
+    from backend.services.bull import _rsi_slope
+    closes = [100.0] * 10
+    slope = _rsi_slope(closes)
+    assert slope == 0.0
