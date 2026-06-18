@@ -1,6 +1,36 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 
+function ScoreTooltip({ breakdown }) {
+  if (!breakdown) return null
+  const rows = [
+    ['Channel', breakdown.channel, 25],
+    ['RSI Slope', breakdown.rsi, 20],
+    ['Volume', breakdown.volume, 15],
+    ['Macro', breakdown.macro, 20],
+    ['Options', breakdown.options, 20],
+  ]
+  return (
+    <div style={{
+      position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
+      zIndex: 60, background: 'var(--surface)', border: '1px solid var(--border2)',
+      borderRadius: 6, padding: '10px 14px', minWidth: 170, fontSize: 11,
+      color: 'var(--text2)', boxShadow: '0 4px 20px rgba(0,0,0,0.5)', marginTop: 6,
+      pointerEvents: 'none',
+    }}>
+      <div style={{ fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 8, fontSize: 10 }}>SCORE BREAKDOWN</div>
+      {rows.map(([label, pts, max]) => (
+        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
+          <span style={{ color: 'var(--muted)' }}>{label}</span>
+          <span style={{ fontFamily: 'monospace', color: pts === max ? 'var(--green)' : pts > 0 ? 'var(--text)' : 'var(--muted)' }}>
+            {pts ?? 0}/{max}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 const QUALITY_ORDER = { complete: 0, partial: 1, price_only: 2 }
 const QUALITY_DOT   = { complete: '●', partial: '◑', price_only: '○' }
 const QUALITY_COLOR = { complete: 'var(--green)', partial: 'var(--accent)', price_only: 'var(--muted)' }
@@ -20,23 +50,6 @@ function scoreColor(score) {
   return 'var(--muted)'
 }
 
-function computeComponentScores(c) {
-  const pct = c.channel_proximity_pct ?? 1
-  const channel_pts = Math.max(0, Math.round(Math.max(0, (0.25 - pct) / 0.25) * 25))
-  const slope = c.rsi_slope ?? 0
-  const rsi_pts = Math.max(0, Math.min(20, slope > 0 ? Math.round((Math.min(slope, 3) / 3) * 20) : 0))
-  const vr = c.volume_ratio ?? 0
-  const vol_pts = vr >= 1.2 ? 15 : vr >= 0.8 ? 10 : 0
-  const dq = c.data_quality
-  let options_pts = 0
-  if (dq === 'complete') {
-    const bid = c.atm_bid ?? 0
-    const oi  = c.atm_oi  ?? 0
-    options_pts = bid >= 0.50 && oi >= 500 ? 20 : bid >= 0.30 && oi >= 200 ? 12 : 0
-  }
-  const macro_pts = Math.max(0, Math.min(20, (c.score ?? 0) - channel_pts - rsi_pts - vol_pts - options_pts))
-  return { channel_pts, rsi_pts, vol_pts, macro_pts, options_pts }
-}
 
 export default function Bull() {
   const [scan, setScan]               = useState(null)
@@ -357,7 +370,7 @@ function StrikeCard({ label, value }) {
 }
 
 function ExpandedRow({ c, logged, onLog, onDismiss }) {
-  const scores = computeComponentScores(c)
+  const bd = c.score_breakdown || {}
   const logState = logged[c.symbol]
 
   return (
@@ -366,11 +379,11 @@ function ExpandedRow({ c, logged, onLog, onDismiss }) {
         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 10 }}>
           SCORE BREAKDOWN — {c.score}/100
         </div>
-        <MiniBar label="Channel Proximity" pts={scores.channel_pts} max={25} />
-        <MiniBar label="RSI Slope" pts={scores.rsi_pts} max={20} />
-        <MiniBar label="Volume Ratio" pts={scores.vol_pts} max={15} />
-        <MiniBar label="Macro Alignment" pts={scores.macro_pts} max={20} />
-        <MiniBar label="Options Quality" pts={scores.options_pts} max={20} />
+        <MiniBar label="Channel Proximity" pts={bd.channel ?? 0} max={25} />
+        <MiniBar label="RSI Slope" pts={bd.rsi ?? 0} max={20} />
+        <MiniBar label="Volume Ratio" pts={bd.volume ?? 0} max={15} />
+        <MiniBar label="Macro Alignment" pts={bd.macro ?? 0} max={20} />
+        <MiniBar label="Options Quality" pts={bd.options ?? 0} max={20} />
       </div>
 
       {c.setup_brief && (
@@ -431,6 +444,7 @@ function ExpandedRow({ c, logged, onLog, onDismiss }) {
 function CandidatesTable({ candidates }) {
   const [expanded, setExpanded] = useState(null)
   const [logged, setLogged] = useState({})
+  const [hoveredScore, setHoveredScore] = useState(null)
 
   if (!candidates || candidates.length === 0) {
     return <div style={{ padding: '20px 0', color: 'var(--muted)', fontSize: 13 }}>No setups met criteria today — market conditions may be unfavorable.</div>
@@ -484,7 +498,14 @@ function CandidatesTable({ candidates }) {
               }}
             >
               <span style={{ fontWeight: 700, color: 'var(--text)' }}>{c.symbol}</span>
-              <span style={{ fontWeight: 700, color: scoreColor(c.score ?? 0) }}>{c.score ?? '—'}</span>
+              <span
+                style={{ position: 'relative', fontWeight: 700, color: scoreColor(c.score ?? 0), cursor: c.score_breakdown ? 'help' : 'default' }}
+                onMouseEnter={() => c.score_breakdown && setHoveredScore(i)}
+                onMouseLeave={() => setHoveredScore(null)}
+              >
+                {c.score ?? '—'}
+                {hoveredScore === i && <ScoreTooltip breakdown={c.score_breakdown} />}
+              </span>
               <span style={{ fontSize: 12, color: channelColor }}>
                 {channelPct != null ? `▼${channelPct}% low` : '—'}
               </span>

@@ -165,7 +165,7 @@ def _channel_proximity(closes: list, highs: list, lows: list) -> dict:
     if channel_range <= 0:
         return {"slope": channel_slope, "proximity_pct": 0.5, "passes": False}
     proximity_pct = float((closes[-1] - lower_val) / channel_range)
-    passes = channel_slope > 0 and proximity_pct <= 0.25
+    passes = channel_slope > 0 and 0 <= proximity_pct <= 0.25
     return {"slope": channel_slope, "proximity_pct": proximity_pct, "passes": passes}
 
 
@@ -218,47 +218,54 @@ def _rsi_slope(closes: list) -> float:
     return (rsi_t2 - rsi_t0) / 2    # slope: change per bar
 
 
-def deterministic_score(candidate: dict, macro: dict) -> int:
+def deterministic_score(candidate: dict, macro: dict) -> dict:
     """
-    Returns 0-100 score from 5 reproducible components.
+    Returns {total, channel_pts, rsi_pts, volume_pts, macro_pts, options_pts}.
+    Each component is capped at its individual max so no single dimension can
+    inflate the total beyond its allocation.
     Channel proximity (25), RSI slope (20), Volume ratio (15),
     Macro alignment (20), Options quality (20).
     """
-    score = 0
-
-    # Channel proximity: 25 pts linear, 25 at 0%, 0 at 25%+
+    # Channel proximity: capped at 25. Negative proximity (below channel) = 0.
     prox = candidate.get("channel_proximity_pct")
-    if prox is not None:
-        score += max(0, int(25 * (1.0 - float(prox) / 0.25)))
+    channel_pts = 0
+    if prox is not None and float(prox) >= 0:
+        channel_pts = min(25, max(0, int(25 * (1.0 - float(prox) / 0.25))))
 
     # RSI slope: 20 pts linear, 20 at slope>=3, 0 at slope<=0
     rsi_slope_val = float(candidate.get("rsi_slope") or 0.0)
-    score += max(0, min(20, int(20 * min(rsi_slope_val, 3.0) / 3.0)))
+    rsi_pts = max(0, min(20, int(20 * min(rsi_slope_val, 3.0) / 3.0)))
 
     # Volume ratio: stepped
     vol_ratio = float(candidate.get("volume_ratio") or 0.0)
-    if vol_ratio >= 1.2:
-        score += 15
-    elif vol_ratio >= 0.8:
-        score += 10
+    volume_pts = 15 if vol_ratio >= 1.2 else (10 if vol_ratio >= 0.8 else 0)
 
     # Macro alignment
     spy_regime = (macro.get("spy") or {}).get("regime", "neutral")
     qqq_regime = (macro.get("qqq") or {}).get("regime", "neutral")
     bullish_count = sum(1 for r in [spy_regime, qqq_regime] if r == "bullish")
-    score += 20 if bullish_count == 2 else (10 if bullish_count == 1 else 0)
+    macro_pts = 20 if bullish_count == 2 else (10 if bullish_count == 1 else 0)
 
     # Options quality
     dq = candidate.get("data_quality", "price_only")
+    options_pts = 0
     if dq == "complete":
         oi = int(candidate.get("atm_oi") or 0)
         bid = float(candidate.get("atm_bid") or 0.0)
         if oi >= 500 and bid >= 0.50:
-            score += 20
+            options_pts = 20
         elif oi >= 200 and bid >= 0.30:
-            score += 12
+            options_pts = 12
 
-    return min(100, score)
+    total = min(100, channel_pts + rsi_pts + volume_pts + macro_pts + options_pts)
+    return {
+        "total": total,
+        "channel_pts": channel_pts,
+        "rsi_pts": rsi_pts,
+        "volume_pts": volume_pts,
+        "macro_pts": macro_pts,
+        "options_pts": options_pts,
+    }
 
 
 # ── Batch EOD Snapshot (yfinance) ────────────────────────────────────────────
@@ -570,7 +577,15 @@ def run_pipeline(options_provider, playbook_rules: list, bull_profile: dict) -> 
 
     # 6. Deterministic scoring
     for c in candidates:
-        c["score"] = deterministic_score(c, macro)
+        breakdown = deterministic_score(c, macro)
+        c["score"] = breakdown["total"]
+        c["score_breakdown"] = {
+            "channel": breakdown["channel_pts"],
+            "rsi": breakdown["rsi_pts"],
+            "volume": breakdown["volume_pts"],
+            "macro": breakdown["macro_pts"],
+            "options": breakdown["options_pts"],
+        }
     candidates.sort(key=lambda x: x.get("score", 0), reverse=True)
 
     # 7. Setup briefs for complete candidates (parallel Sonnet calls)
