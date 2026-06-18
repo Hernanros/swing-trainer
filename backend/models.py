@@ -240,3 +240,25 @@ class BullScan(Base):
     sectors_json = Column(Text, nullable=True)
     results_json = Column(Text, nullable=True)
     created_at   = Column(String, nullable=True)
+
+
+class PaperBullTrade(Base):
+    __tablename__ = "paper_bull_trades"
+    id                = Column(Integer, primary_key=True)
+    user_id           = Column(Integer, ForeignKey("users.id"), nullable=False)
+    scan_id           = Column(Integer, ForeignKey("bull_scans.id"), nullable=True)
+    symbol            = Column(String, nullable=False)
+    logged_at         = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    expiry            = Column(String, nullable=False)
+    short_strike      = Column(Float, nullable=False)
+    long_strike       = Column(Float, nullable=False)
+    premium_credit    = Column(Float, nullable=False)
+    score             = Column(Integer, nullable=False)
+    data_quality      = Column(String, default="complete")
+    channel_proximity = Column(Float)
+    rsi_slope         = Column(Float)
+    macro_regime      = Column(String)
+    outcome           = Column(String)
+    pnl               = Column(Float)
+    resolved_at       = Column(DateTime)
+    auto_logged       = Column(Boolean, default=True)

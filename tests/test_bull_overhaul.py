@@ -409,3 +409,146 @@ def test_generate_setup_brief_calls_claude_sonnet():
     call_kwargs = mock_client.messages.create.call_args[1]
     assert call_kwargs["model"] == "claude-sonnet-4-6"
     assert call_kwargs["max_tokens"] == 150
+
+
+# ── Task 8: PaperBullTrade model + router ──────────────────────────────────────
+
+import json as _json
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+from fastapi.testclient import TestClient
+from backend.main import app
+from backend.database import Base, get_db
+import backend.auth as _auth_module
+
+_TEST_ENGINE = create_engine(
+    "sqlite://",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+_TestSession = sessionmaker(autocommit=False, autoflush=False, bind=_TEST_ENGINE)
+
+
+@pytest.fixture(autouse=False)
+def bull_client():
+    saved_db = app.dependency_overrides.get(get_db)
+    saved_auth = _auth_module.DEV_BYPASS_AUTH
+    _auth_module.DEV_BYPASS_AUTH = True
+    app.dependency_overrides[get_db] = lambda: _TestSession()
+    Base.metadata.create_all(bind=_TEST_ENGINE)
+    db = _TestSession()
+    from backend.models import User
+    if not db.query(User).filter_by(email="test@test.com").first():
+        db.add(User(name="Tester", email="test@test.com", trading_stage="intermediate", time_budget="1h", active_skills="[]"))
+        db.commit()
+    db.close()
+    yield TestClient(app)
+    if saved_db is None:
+        app.dependency_overrides.pop(get_db, None)
+    else:
+        app.dependency_overrides[get_db] = saved_db
+    _auth_module.DEV_BYPASS_AUTH = saved_auth
+
+
+def test_paper_bull_trade_table_exists():
+    from sqlalchemy import inspect
+    Base.metadata.create_all(bind=_TEST_ENGINE)
+    insp = inspect(_TEST_ENGINE)
+    assert "paper_bull_trades" in insp.get_table_names()
+
+
+def test_paper_bull_trade_columns():
+    from sqlalchemy import inspect
+    Base.metadata.create_all(bind=_TEST_ENGINE)
+    insp = inspect(_TEST_ENGINE)
+    cols = {c["name"] for c in insp.get_columns("paper_bull_trades")}
+    required = {
+        "id", "user_id", "scan_id", "symbol", "logged_at", "expiry",
+        "short_strike", "long_strike", "premium_credit", "score",
+        "data_quality", "outcome", "pnl", "auto_logged",
+    }
+    assert required.issubset(cols)
+
+
+def test_run_scan_auto_logs_complete_high_score_candidate(bull_client):
+    complete_candidate = {
+        "symbol": "AAPL", "close": 185.0, "score": 75, "data_quality": "complete",
+        "expiry": "2026-07-11", "short_strike": 185.0, "long_strike": 180.0,
+        "estimated_credit": 0.80, "channel_proximity_pct": 0.10, "rsi_slope": 1.5,
+        "setup_brief": "Test brief.", "contracts": 1, "max_loss_per_contract": 420.0,
+        "risk_dollars": 250.0, "sector": "XLK", "sector_label": "strong",
+    }
+    mock_result = {
+        "macro": {"spy": {"regime": "bullish", "close": 535.0, "sma50": 520.0}, "qqq": {"regime": "bullish", "close": 450.0}},
+        "sectors": [{"symbol": "XLK", "label": "strong", "pct_vs_20d": 1.2}],
+        "candidates": [complete_candidate],
+    }
+    with patch("backend.services.bull.run_pipeline", return_value=mock_result):
+        resp = bull_client.post("/api/bull/scan/run")
+    assert resp.status_code == 200
+
+    db = _TestSession()
+    from backend.models import PaperBullTrade
+    trades = db.query(PaperBullTrade).all()
+    db.close()
+    assert len(trades) == 1
+    assert trades[0].symbol == "AAPL"
+    assert trades[0].score == 75
+    assert trades[0].auto_logged is True
+
+
+def test_run_scan_does_not_log_low_score_candidate(bull_client):
+    low_candidate = {
+        "symbol": "LOWSC", "close": 50.0, "score": 45, "data_quality": "complete",
+        "expiry": "2026-07-11", "short_strike": 50.0, "long_strike": 45.0,
+        "estimated_credit": 0.40, "channel_proximity_pct": 0.20, "rsi_slope": 0.5,
+        "setup_brief": "", "contracts": 0, "max_loss_per_contract": 460.0, "risk_dollars": 0,
+    }
+    mock_result = {
+        "macro": {"spy": {"regime": "neutral", "close": 500.0, "sma50": 500.0}, "qqq": {"regime": "neutral", "close": 400.0}},
+        "sectors": [],
+        "candidates": [low_candidate],
+    }
+    with patch("backend.services.bull.run_pipeline", return_value=mock_result):
+        resp = bull_client.post("/api/bull/scan/run")
+    assert resp.status_code == 200
+
+    db = _TestSession()
+    from backend.models import PaperBullTrade
+    trades = db.query(PaperBullTrade).filter_by(symbol="LOWSC").all()
+    db.close()
+    assert len(trades) == 0
+
+
+def test_get_kpis_returns_empty_shape_when_no_trades(bull_client):
+    resp = bull_client.get("/api/bull/kpis")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "total_trades" in data
+    assert "win_rate" in data
+    assert "score_edge" in data
+    assert data["total_trades"] == 0
+
+
+def test_get_paper_trades_returns_paginated_list(bull_client):
+    db = _TestSession()
+    from backend.models import PaperBullTrade
+    from datetime import datetime, timezone
+    db.add(PaperBullTrade(
+        user_id=1, scan_id=None, symbol="TEST",
+        logged_at=datetime.now(timezone.utc),
+        expiry="2026-07-11", short_strike=100.0, long_strike=95.0,
+        premium_credit=0.75, score=70, data_quality="complete",
+        auto_logged=True,
+    ))
+    db.commit()
+    db.close()
+
+    resp = bull_client.get("/api/bull/paper-trades?page=1&per_page=10")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "trades" in data
+    assert "total" in data
+    assert data["total"] >= 1
+    assert data["trades"][0]["symbol"] == "TEST"

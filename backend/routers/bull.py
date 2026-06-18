@@ -7,7 +7,7 @@ from backend.auth import get_current_user
 from backend.models import User, BullProfile, BullScan, PlaybookRule
 from backend.schemas import BullProfileCreate, BullProfileResponse, BullChatRequest
 import backend.services.bull as bull_svc
-from backend.services.options import get_options_provider
+from backend.services.data import get_options_provider
 
 router = APIRouter(prefix="/bull", tags=["bull"])
 
@@ -99,24 +99,51 @@ def run_scan(current_user: User = Depends(get_current_user), db: Session = Depen
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Scan failed: {e}")
     today = date.today().isoformat()
+    now = datetime.now(timezone.utc)
     existing = db.query(BullScan).filter_by(user_id=current_user.id, scan_date=today).first()
-    now = datetime.now(timezone.utc).isoformat()
     if existing:
         existing.macro_json = json.dumps(result["macro"])
         existing.sectors_json = json.dumps(result["sectors"])
         existing.results_json = json.dumps(result["candidates"])
-        existing.created_at = now
+        existing.created_at = now.isoformat()
+        scan_obj = existing
     else:
-        db.add(BullScan(
+        scan_obj = BullScan(
             user_id=current_user.id,
             scan_date=today,
             macro_json=json.dumps(result["macro"]),
             sectors_json=json.dumps(result["sectors"]),
             results_json=json.dumps(result["candidates"]),
-            created_at=now,
-        ))
+            created_at=now.isoformat(),
+        )
+        db.add(scan_obj)
+        db.flush()
+    # Auto-log paper trades for complete candidates scoring >= 60
+    from backend.models import PaperBullTrade
+    macro = result.get("macro", {})
+    spy_r = (macro.get("spy") or {}).get("regime", "neutral")
+    qqq_r = (macro.get("qqq") or {}).get("regime", "neutral")
+    macro_regime = "bullish" if spy_r == "bullish" and qqq_r == "bullish" else "neutral"
+    for c in result["candidates"]:
+        if c.get("data_quality") == "complete" and (c.get("score") or 0) >= 60:
+            db.add(PaperBullTrade(
+                user_id=current_user.id,
+                scan_id=scan_obj.id,
+                symbol=c["symbol"],
+                logged_at=now,
+                expiry=c.get("expiry", ""),
+                short_strike=float(c.get("short_strike") or 0),
+                long_strike=float(c.get("long_strike") or 0),
+                premium_credit=float(c.get("estimated_credit") or 0),
+                score=int(c.get("score") or 0),
+                data_quality=c.get("data_quality", "complete"),
+                channel_proximity=c.get("channel_proximity_pct"),
+                rsi_slope=c.get("rsi_slope"),
+                macro_regime=macro_regime,
+                auto_logged=True,
+            ))
     db.commit()
-    return {"scan_date": today, "candidates_count": len(result["candidates"]), "created_at": now}
+    return {"scan_date": today, "candidates_count": len(result["candidates"]), "created_at": now.isoformat()}
 
 
 @router.post("/seed-playbook")
@@ -135,6 +162,93 @@ def seed_playbook(current_user: User = Depends(get_current_user), db: Session = 
         ))
     db.commit()
     return {"already_seeded": False, "setup_type": "bull_put_spread", "created": len(bull_svc.BULL_ASSISTANT_PLAYBOOK)}
+
+
+@router.get("/kpis")
+def get_kpis(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    from backend.models import PaperBullTrade
+    from sqlalchemy import func
+    resolved = (
+        db.query(PaperBullTrade)
+        .filter(PaperBullTrade.user_id == current_user.id, PaperBullTrade.outcome.in_(["win", "loss"]))
+        .all()
+    )
+    open_count = (
+        db.query(func.count(PaperBullTrade.id))
+        .filter(PaperBullTrade.user_id == current_user.id, PaperBullTrade.outcome.is_(None))
+        .scalar()
+    ) or 0
+    if not resolved:
+        return {"total_trades": 0, "open_trades": open_count, "win_rate": 0, "expectancy_per_dollar": 0, "total_pnl": 0, "score_edge": {"high": {"threshold": 80, "win_rate": 0, "count": 0}, "mid": {"threshold": 60, "win_rate": 0, "count": 0}, "low": {"threshold": 0, "win_rate": 0, "count": 0}}}
+    total = len(resolved)
+    wins = [t for t in resolved if t.outcome == "win"]
+    win_rate = round(len(wins) / total, 3)
+    total_pnl = round(sum(t.pnl or 0 for t in resolved), 2)
+    total_risk = sum(
+        max((t.short_strike - t.long_strike - (t.premium_credit or 0)) * 100, 0.01)
+        for t in resolved
+    )
+    expectancy = round(total_pnl / total_risk, 3) if total_risk > 0 else 0.0
+
+    def _band(lo, hi):
+        band = [t for t in resolved if lo <= (t.score or 0) < hi]
+        w = sum(1 for t in band if t.outcome == "win")
+        return {"threshold": lo, "win_rate": round(w / len(band), 3) if band else 0, "count": len(band)}
+
+    return {
+        "total_trades": total,
+        "open_trades": open_count,
+        "win_rate": win_rate,
+        "expectancy_per_dollar": expectancy,
+        "total_pnl": total_pnl,
+        "score_edge": {"high": _band(80, 101), "mid": _band(60, 80), "low": _band(0, 60)},
+    }
+
+
+@router.get("/paper-trades")
+def get_paper_trades(
+    page: int = 1,
+    per_page: int = 20,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from backend.models import PaperBullTrade
+    from sqlalchemy import func
+    total = (
+        db.query(func.count(PaperBullTrade.id))
+        .filter(PaperBullTrade.user_id == current_user.id)
+        .scalar()
+    ) or 0
+    trades = (
+        db.query(PaperBullTrade)
+        .filter(PaperBullTrade.user_id == current_user.id)
+        .order_by(PaperBullTrade.logged_at.desc())
+        .offset((page - 1) * per_page)
+        .limit(per_page)
+        .all()
+    )
+    return {
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "trades": [
+            {
+                "id": t.id,
+                "symbol": t.symbol,
+                "logged_at": t.logged_at.isoformat() if t.logged_at else None,
+                "expiry": t.expiry,
+                "short_strike": t.short_strike,
+                "long_strike": t.long_strike,
+                "premium_credit": t.premium_credit,
+                "score": t.score,
+                "data_quality": t.data_quality,
+                "outcome": t.outcome,
+                "pnl": t.pnl,
+                "auto_logged": t.auto_logged,
+            }
+            for t in trades
+        ],
+    }
 
 
 @router.post("/chat")

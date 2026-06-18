@@ -228,8 +228,56 @@ async def lifespan(app: FastAPI):
         finally:
             db.close()
 
+    async def _resolve_expiring_paper_trades():
+        """Resolve paper trades expiring today. Run daily at 4:30 PM ET."""
+        import yfinance as yf
+        from datetime import date as _date, datetime as _datetime, timezone as _tz
+        from backend.database import SessionLocal
+        from backend.models import PaperBullTrade
+        today_str = _date.today().isoformat()
+        db = SessionLocal()
+        try:
+            open_trades = (
+                db.query(PaperBullTrade)
+                .filter(PaperBullTrade.outcome.is_(None), PaperBullTrade.expiry == today_str)
+                .all()
+            )
+            if not open_trades:
+                return
+            symbols = list({t.symbol for t in open_trades})
+            prices: dict = {}
+            for sym in symbols:
+                try:
+                    hist = yf.Ticker(sym).history(period="2d")
+                    if not hist.empty:
+                        prices[sym] = float(hist["Close"].iloc[-1])
+                except Exception:
+                    pass
+            now = _datetime.now(_tz.utc)
+            resolved = 0
+            for trade in open_trades:
+                final = prices.get(trade.symbol)
+                if final is None:
+                    continue
+                spread_width = trade.short_strike - trade.long_strike
+                if final > trade.short_strike:
+                    trade.outcome = "win"
+                    trade.pnl = round(trade.premium_credit * 100, 2)
+                else:
+                    trade.outcome = "loss"
+                    trade.pnl = round(-(spread_width - trade.premium_credit) * 100, 2)
+                trade.resolved_at = now
+                resolved += 1
+            db.commit()
+            _log.info("Resolved %d paper trades for expiry %s", resolved, today_str)
+        except Exception as e:
+            _log.error("Expiry resolution failed: %s", e)
+        finally:
+            db.close()
+
     scheduler = AsyncIOScheduler(timezone=pytz.timezone("America/New_York"))
     scheduler.add_job(_run_scheduled_bull_scan, "cron", day_of_week="mon-fri", hour=17, minute=0)
+    scheduler.add_job(_resolve_expiring_paper_trades, "cron", day_of_week="mon-fri", hour=16, minute=30)
     scheduler.start()
     _log.info("Bull scan scheduler started — runs weekdays at 5 PM ET")
 
