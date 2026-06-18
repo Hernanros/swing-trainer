@@ -1,8 +1,11 @@
+import logging
 import math
 import os
 from abc import ABC, abstractmethod
 from datetime import date, timedelta
 from typing import Optional
+
+_log = logging.getLogger(__name__)
 
 
 class OptionsProvider(ABC):
@@ -28,7 +31,8 @@ class YFinanceOptionsProvider(OptionsProvider):
                 if min_exp <= exp <= max_exp:
                     return exp_str
             return None
-        except Exception:
+        except Exception as e:
+            _log.warning("get_nearest_weekly_expiry(%s) failed: %s", symbol, e)
             return None
 
     def get_chain(self, symbol: str, expiry: str) -> dict:
@@ -53,6 +57,8 @@ class YFinanceOptionsProvider(OptionsProvider):
                 if iv_raw == 0 or math.isnan(iv_raw):
                     mid = (bid + ask) / 2
                     if stock_price > 0 and T > 0 and mid > 0:
+                        # Brenner-Subrahmanyam ATM approximation; accurate only when
+                        # strike ≈ stock_price — OTM values are rough estimates only
                         iv_raw = (mid / stock_price) * math.sqrt(2 * math.pi / T)
                     else:
                         iv_raw = 0.0
@@ -63,8 +69,9 @@ class YFinanceOptionsProvider(OptionsProvider):
                     "oi": oi,
                     "iv": round(min(iv_raw, 5.0), 3),
                 })
-            return {"strikes": sorted(puts["strike"].tolist()), "puts": result_puts}
-        except Exception:
+            return {"strikes": sorted(p["strike"] for p in result_puts), "puts": result_puts}
+        except Exception as e:
+            _log.warning("get_chain(%s, %s) failed: %s", symbol, expiry, e)
             return {"strikes": [], "puts": []}
 
 
