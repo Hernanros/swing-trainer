@@ -172,3 +172,75 @@ Or to return to master after:
 ```bash
 git checkout master
 ```
+
+---
+
+## Phase 7 — Options Trading Module
+**Goal:** Extend the app to support the user's current strategy pivot toward bull put spreads, bear call spreads, and shorts — integrating options-specific drills, a spread builder with Claude advisory, and behavioral debrief for options trades.
+
+**Design principle:** Follow the same loop as existing stock trades — Train → Build → Journal → AI Debrief. Don't create a separate silo. Options are a trade type, not a separate app.
+
+### 7A. Options drill bank
+**Files:** `frontend/src/data/drillQuestions.js`, `frontend/src/data/drillChartData.js`
+
+Add a new drill category: `options_setups`. Questions should cover:
+- Bull put spread: setup criteria, when to enter, max gain/loss calculation, breakeven, when to close
+- Bear call spread: same structure for bearish credit spreads
+- Short stock/synthetic: entry criteria, risk management, covering logic
+- Strike selection principles: how far OTM, how to balance premium vs. probability
+- IV rank: when high IV favors credit spreads vs. debit
+
+Use the existing AI drill endpoint (`POST /api/train/ai-drill`) to generate on-demand options questions referencing actual spread parameters from 7B trades.
+
+### 7B. Spread builder with Claude pre-trade advisory
+**New file:** `frontend/src/components/SpreadBuilder.jsx`
+**New route:** `POST /api/trades/spread-advisory`
+
+Spread builder form captures (see `.planning/requirements/spread-builder-data-model.md` for full spec):
+- Underlying symbol, strategy type, short strike, long strike, expiry, premium collected/paid
+- Derived display: max gain, max loss, breakeven, risk/reward ratio
+
+On submit (before entering the trade), call Claude with:
+```
+User strategy: bull put spread on {symbol}
+Short strike: {short_k}, Long strike: {long_k}, Expiry: {expiry}, Premium: {premium}
+Max gain: {max_gain}, Max loss: {max_loss}, Breakeven: {breakeven}
+User's playbook rules for this setup: {rules}
+
+Evaluate: strike placement, risk/reward quality, IV context expectations.
+Advise: what to expect, when to close (% of max profit target), key risk.
+```
+
+This advisory is saved to the trade record as `pre_trade_advisory`.
+
+### 7C. Options journal entries
+**Files:** `backend/schemas.py`, `backend/models.py`, `backend/routers/trades.py`
+
+Extend the `Trade` model to support options:
+- Add `trade_type` enum: `stock | bull_put_spread | bear_call_spread | short`
+- Add nullable `spread_params` TEXT column (JSON): `{short_strike, long_strike, expiry, premium, contracts}`
+- Derived fields computed at close: `max_gain`, `max_loss`, `breakeven` (store on close)
+- Add `pre_trade_advisory` TEXT column (stores 7B Claude advisory)
+
+Journal page: when `trade_type` is a spread, show spread-specific columns (short/long strike, expiry, premium) instead of entry/stop/target.
+
+### 7D. Behavioral AI debrief for options
+**File:** `backend/services/claude.py`
+
+Extend `generate_trade_debrief()` to handle options context:
+- For spreads: did the user exit at their % of max profit target? Did they hold to expiry? Did they adjust (roll, close one leg)?
+- Compare `pre_trade_advisory` expectations vs. actual outcome
+- Flag behavioral patterns: "You planned to close at 50% profit but held to expiry 3 of 4 times"
+
+Same debrief UX as existing trades — no new UI needed.
+
+### Build order
+
+| Step | Task | Effort |
+|---|---|---|
+| 7A | Options drill questions (static bank, 20+ questions) | 1 day |
+| 7B | Spread builder form + Claude advisory endpoint | 2 days |
+| 7C | Trade model extension + options journal view | 2 days |
+| 7D | Options-aware debrief | 1 day |
+
+**Start with 7B — the spread builder.** It delivers immediate value (you're already trading these setups), informs what drill questions to write, and the trade model extension follows naturally from what the builder captures.
