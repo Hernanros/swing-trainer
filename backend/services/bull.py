@@ -257,14 +257,48 @@ def deterministic_score(candidate: dict, macro: dict) -> dict:
         elif oi >= 200 and bid >= 0.30:
             options_pts = 12
 
+    # Build justification strings
+    if prox is None:
+        channel_why = "No channel data"
+    elif float(prox) < 0:
+        channel_why = f"Below channel lower band — breakdown signal, 0 pts"
+    else:
+        channel_why = f"{float(prox)*100:.0f}% above lower band of 20-day upward channel"
+
+    if rsi_slope_val <= 0:
+        rsi_why = f"RSI flat or falling ({rsi_slope_val:+.2f} pts/day) — no momentum"
+    else:
+        rsi_why = f"RSI rising {rsi_slope_val:+.2f} pts/day — momentum turning up"
+
+    if vol_ratio >= 1.2:
+        volume_why = f"Volume {vol_ratio:.2f}× 20-day avg — strong confirmation"
+    elif vol_ratio >= 0.8:
+        volume_why = f"Volume {vol_ratio:.2f}× 20-day avg — adequate"
+    else:
+        volume_why = f"Volume {vol_ratio:.2f}× 20-day avg — below average"
+
+    spy_label = spy_regime.capitalize()
+    qqq_label = qqq_regime.capitalize()
+    macro_why = f"SPY {spy_label} · QQQ {qqq_label}"
+
+    if dq == "price_only":
+        options_why = "No options data available"
+    elif dq == "partial":
+        options_why = "Options data incomplete"
+    else:
+        oi = int(candidate.get("atm_oi") or 0)
+        bid = float(candidate.get("atm_bid") or 0.0)
+        iv_pct = round((candidate.get("atm_iv") or 0) * 100, 0)
+        options_why = f"ATM bid ${bid:.2f} · OI {oi:,} · IV {iv_pct:.0f}%"
+
     total = min(100, channel_pts + rsi_pts + volume_pts + macro_pts + options_pts)
     return {
         "total": total,
-        "channel_pts": channel_pts,
-        "rsi_pts": rsi_pts,
-        "volume_pts": volume_pts,
-        "macro_pts": macro_pts,
-        "options_pts": options_pts,
+        "channel_pts": channel_pts, "channel_why": channel_why,
+        "rsi_pts": rsi_pts,         "rsi_why": rsi_why,
+        "volume_pts": volume_pts,   "volume_why": volume_why,
+        "macro_pts": macro_pts,     "macro_why": macro_why,
+        "options_pts": options_pts, "options_why": options_why,
     }
 
 
@@ -580,11 +614,11 @@ def run_pipeline(options_provider, playbook_rules: list, bull_profile: dict) -> 
         breakdown = deterministic_score(c, macro)
         c["score"] = breakdown["total"]
         c["score_breakdown"] = {
-            "channel": breakdown["channel_pts"],
-            "rsi": breakdown["rsi_pts"],
-            "volume": breakdown["volume_pts"],
-            "macro": breakdown["macro_pts"],
-            "options": breakdown["options_pts"],
+            "channel": breakdown["channel_pts"], "channel_why": breakdown["channel_why"],
+            "rsi":     breakdown["rsi_pts"],     "rsi_why":     breakdown["rsi_why"],
+            "volume":  breakdown["volume_pts"],  "volume_why":  breakdown["volume_why"],
+            "macro":   breakdown["macro_pts"],   "macro_why":   breakdown["macro_why"],
+            "options": breakdown["options_pts"], "options_why": breakdown["options_why"],
         }
     candidates.sort(key=lambda x: x.get("score", 0), reverse=True)
 

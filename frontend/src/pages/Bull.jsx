@@ -4,27 +4,30 @@ import { api } from '../api'
 function ScoreTooltip({ breakdown }) {
   if (!breakdown) return null
   const rows = [
-    ['Channel', breakdown.channel, 25],
-    ['RSI Slope', breakdown.rsi, 20],
-    ['Volume', breakdown.volume, 15],
-    ['Macro', breakdown.macro, 20],
-    ['Options', breakdown.options, 20],
+    ['Channel', breakdown.channel, 25, breakdown.channel_why],
+    ['RSI Slope', breakdown.rsi, 20, breakdown.rsi_why],
+    ['Volume', breakdown.volume, 15, breakdown.volume_why],
+    ['Macro', breakdown.macro, 20, breakdown.macro_why],
+    ['Options', breakdown.options, 20, breakdown.options_why],
   ]
   return (
     <div style={{
       position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)',
       zIndex: 60, background: 'var(--surface)', border: '1px solid var(--border2)',
-      borderRadius: 6, padding: '10px 14px', minWidth: 170, fontSize: 11,
+      borderRadius: 6, padding: '12px 14px', minWidth: 260, fontSize: 11,
       color: 'var(--text2)', boxShadow: '0 4px 20px rgba(0,0,0,0.5)', marginTop: 6,
       pointerEvents: 'none',
     }}>
-      <div style={{ fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 8, fontSize: 10 }}>SCORE BREAKDOWN</div>
-      {rows.map(([label, pts, max]) => (
-        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 4 }}>
-          <span style={{ color: 'var(--muted)' }}>{label}</span>
-          <span style={{ fontFamily: 'monospace', color: pts === max ? 'var(--green)' : pts > 0 ? 'var(--text)' : 'var(--muted)' }}>
-            {pts ?? 0}/{max}
-          </span>
+      <div style={{ fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 10, fontSize: 10 }}>SCORE BREAKDOWN</div>
+      {rows.map(([label, pts, max, why]) => (
+        <div key={label} style={{ marginBottom: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, marginBottom: 2 }}>
+            <span style={{ color: 'var(--muted)' }}>{label}</span>
+            <span style={{ fontFamily: 'monospace', color: pts === max ? 'var(--green)' : pts > 0 ? 'var(--text)' : 'var(--muted)' }}>
+              {pts ?? 0}/{max}
+            </span>
+          </div>
+          {why && <div style={{ color: 'var(--muted)', fontSize: 10, lineHeight: 1.4 }}>{why}</div>}
         </div>
       ))}
     </div>
@@ -344,18 +347,19 @@ function SectorStrip({ sectors }) {
   )
 }
 
-function MiniBar({ label, pts, max }) {
+function MiniBar({ label, pts, max, why }) {
   const pct = Math.min(100, max > 0 ? Math.round((pts / max) * 100) : 0)
   const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--accent)' : 'var(--muted)'
   return (
-    <div style={{ marginBottom: 7 }}>
+    <div style={{ marginBottom: 9 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 3 }}>
         <span>{label}</span>
-        <span style={{ color }}>{pts}/{max}</span>
+        <span style={{ color, fontFamily: 'monospace' }}>{pts}/{max}</span>
       </div>
-      <div style={{ height: 4, background: 'var(--surface)', borderRadius: 2, overflow: 'hidden' }}>
+      <div style={{ height: 4, background: 'var(--surface)', borderRadius: 2, overflow: 'hidden', marginBottom: why ? 3 : 0 }}>
         <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 2 }} />
       </div>
+      {why && <div style={{ fontSize: 10, color: 'var(--muted)', lineHeight: 1.4 }}>{why}</div>}
     </div>
   )
 }
@@ -379,11 +383,11 @@ function ExpandedRow({ c, logged, onLog, onDismiss }) {
         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 10 }}>
           SCORE BREAKDOWN — {c.score}/100
         </div>
-        <MiniBar label="Channel Proximity" pts={bd.channel ?? 0} max={25} />
-        <MiniBar label="RSI Slope" pts={bd.rsi ?? 0} max={20} />
-        <MiniBar label="Volume Ratio" pts={bd.volume ?? 0} max={15} />
-        <MiniBar label="Macro Alignment" pts={bd.macro ?? 0} max={20} />
-        <MiniBar label="Options Quality" pts={bd.options ?? 0} max={20} />
+        <MiniBar label="Channel Proximity" pts={bd.channel ?? 0} max={25} why={bd.channel_why} />
+        <MiniBar label="RSI Slope"         pts={bd.rsi ?? 0}     max={20} why={bd.rsi_why} />
+        <MiniBar label="Volume Ratio"      pts={bd.volume ?? 0}  max={15} why={bd.volume_why} />
+        <MiniBar label="Macro Alignment"   pts={bd.macro ?? 0}   max={20} why={bd.macro_why} />
+        <MiniBar label="Options Quality"   pts={bd.options ?? 0} max={20} why={bd.options_why} />
       </div>
 
       {c.setup_brief && (
