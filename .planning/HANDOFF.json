@@ -1,37 +1,43 @@
 {
   "version": "1.0",
-  "timestamp": "2026-06-18T08:03:56Z",
-  "phase": "08-bull-assistant",
-  "phase_name": "Bull Assistant Overhaul",
-  "phase_dir": ".planning/phases/08-bull-assistant",
-  "plan": 0,
-  "task": 0,
-  "total_tasks": 3,
+  "timestamp": "2026-06-18T18:58:58Z",
+  "phase": "bull-assistant-overhaul",
+  "phase_name": "Bull Assistant Overhaul — Plans 1 + 2 complete, refinements in progress",
+  "phase_dir": "feature/bull-assistant",
+  "plan": 2,
+  "task": 4,
+  "total_tasks": 4,
   "status": "paused",
   "completed_tasks": [
-    {"id": "debrief-fix", "name": "Fix AI debrief coaching tone + context rules bug", "status": "done", "commit": "d066951"},
-    {"id": "overhaul-design", "name": "Bull Assistant full overhaul design spec (5 dimensions)", "status": "done", "commit": "51a4146"}
+    {"id": 1, "name": "Plan 1 — Backend Core", "status": "done", "commit": "40f6154"},
+    {"id": 2, "name": "Plan 2 — Frontend (Bull.jsx rewrite, Progress Bull Performance, api.js, manual paper trade endpoint)", "status": "done", "commit": "72f6d08"},
+    {"id": 3, "name": "60-day channel sanity gate to block breakout anomalies", "status": "done", "commit": "c766ebb"},
+    {"id": 4, "name": "Score breakdown fixes + justification text + hover tooltip on SCORE cell", "status": "done", "commit": "03e3582"}
   ],
   "remaining_tasks": [
-    {"id": "plan-1", "name": "Write Plan 1 — Backend Core (data.py, bull.py rewrite, PaperBullTrade model, KPI endpoints)", "status": "not_started"},
-    {"id": "plan-2", "name": "Write Plan 2 — Frontend (Bull.jsx rewrite, Progress.jsx additions, api.js)", "status": "not_started"},
-    {"id": "plan-3", "name": "Write Plan 3 — Sprint 2 ML layer (bull_ml.py, retraining job, confidence score)", "status": "not_started"}
+    {"id": 5, "name": "RSI slope: replace 2-point with 5-bar linear regression to reduce noise", "status": "not_started"},
+    {"id": 6, "name": "Tradier sandbox provider implementation (free delayed data key needed first)", "status": "not_started"},
+    {"id": 7, "name": "50 MA: consider adding SMA50 proximity as scoring signal or explicit filter", "status": "discussed_only"}
   ],
   "blockers": [],
-  "human_actions_pending": [],
-  "decisions": [
-    {"decision": "Option B layout (ranked table + expandable rows)", "rationale": "User wants to scan fast and drill into candidates that stand out", "phase": "08"},
-    {"decision": "KPI placement: mini strip on Bull page (collapsed) + full detail in Progress (collapsed)", "rationale": "User does not want stats distracting from primary workflow", "phase": "08"},
-    {"decision": "Deterministic scoring (0-100) replaces Claude Haiku batch scoring", "rationale": "Score compression from Haiku + missing IV data makes scores meaningless; code is more reliable and explainable", "phase": "08"},
-    {"decision": "OptionsProvider abstraction: YFinanceOptionsProvider for POC, TradierOptionsProvider stub ready", "rationale": "User willing to pay for data after POC value demonstrated; one env var swap", "phase": "08"},
-    {"decision": "S&P 500 universe for technical stage, top 20 survivors for per-ticker options check", "rationale": "User wants large discovery universe, not curated 75-stock list", "phase": "08"},
-    {"decision": "Auto-log paper trades for score >= 60 + complete data quality on every scan", "rationale": "Empirical validation requires self-logging without user action", "phase": "08"},
-    {"decision": "Sprint 2 ML (logistic regression) triggers after 50+ resolved paper trades", "rationale": "Cannot train on imaginary data; collect first, train second", "phase": "08"},
-    {"decision": "Channel proximity: stock must be in bottom 25% of channel (proximity_pct <= 0.25)", "rationale": "User specifically looks for stocks near bottom of upward channel (support test setup)", "phase": "08"},
-    {"decision": "RSI slope (direction) prioritized over RSI value", "rationale": "User said direction matters more than absolute value", "phase": "08"},
-    {"decision": "ATM or ITM short put, 5-7 DTE weekly expiry", "rationale": "User's style: aggressive credit, capitalize in first week, high-frequency small wins", "phase": "08"}
+  "human_actions_pending": [
+    {"action": "Run fresh scan after session to validate 60d gate and score fixes (stale 11:31 scan cached in DB)", "context": "Click Run Scan on the Bull Assistant page", "blocking": false},
+    {"action": "Sign up for Tradier Developer Sandbox (free) to get API key before Tradier implementation", "context": "tradier.com/create/account — select Developer sandbox. Then set TRADIER_API_KEY in Railway env vars.", "blocking": true}
   ],
-  "uncommitted_files": [],
-  "next_action": "Invoke superpowers:writing-plans skill to create Plan 1 (Backend Core) from the spec at docs/superpowers/specs/2026-06-18-bull-assistant-overhaul-design.md. Then write Plan 2 (Frontend) and Plan 3 (ML). All three plans must be written before execution begins.",
-  "context_notes": "Full design spec approved by user across 5 dimensions. Brainstorming session complete with visual companion. Debrief bug also fixed this session (coaching tone + context rules). The spec is the source of truth for all three implementation plans. Branch: feature/bull-assistant."
+  "decisions": [
+    {"decision": "60-day channel gate: 20d AND 60d channels must both show upward slope + close in bottom 50% of 60d channel", "rationale": "20d alone fires on breakout anomalies where lower band has no historical support below it"},
+    {"decision": "Negative channel proximity (below lower band) = 0 pts and fails gate", "rationale": "Stock below its own channel is breaking down, not at support — was inflating scores to 100+ without cap"},
+    {"decision": "Score breakdown returned from backend with per-component pts + justification text", "rationale": "Frontend approximation was producing impossible values like 89/25 due to uncapped channel formula"},
+    {"decision": "Tradier sandbox before paying $10/mo live account", "rationale": "Validate that options data improves (more complete candidates) before committing"},
+    {"decision": "RSI slope: current 2-point method is noisy; 5-bar linear regression planned", "rationale": "A single strong day makes slope look great even if RSI trend is flat"},
+    {"decision": "Above 50 MA + at channel lower band = valid bull put spread setup", "rationale": "Above 50 MA = trend intact; near channel support = pullback entry before next leg up. User confirmed understanding."}
+  ],
+  "uncommitted_files": [
+    ".planning/STATE.md",
+    ".planning/phases/07-options-trading-module/07-CONTEXT.md",
+    "CLAUDE.md",
+    "docs/superpowers/plans/2026-06-18-bull-backend-core.md"
+  ],
+  "next_action": "Fix RSI slope to use 5-bar linear regression (backend/services/bull.py _rsi_slope function), or implement Tradier sandbox provider in backend/services/data.py if Tradier API key is available",
+  "context_notes": "4 candidates showing after 60d gate — this is expected given tight filters. All 4 session commits deployed to Railway on feature/bull-assistant branch. System working end-to-end. Plan 3 (ML) blocked until 50+ resolved paper trades."
 }
