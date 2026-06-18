@@ -176,3 +176,122 @@ def test_rsi_slope_returns_zero_when_insufficient_data():
     closes = [100.0] * 10
     slope = _rsi_slope(closes)
     assert slope == 0.0
+
+
+# ── Task 5: deterministic_score + new stage1_filter ────────────────────────────
+
+def test_deterministic_score_both_bullish_complete_full_score():
+    from backend.services.bull import deterministic_score
+    candidate = {
+        "channel_proximity_pct": 0.0,   # at lower band = 25 pts
+        "rsi_slope": 3.0,               # max slope = 20 pts
+        "volume_ratio": 1.5,            # >=1.2x = 15 pts
+        "data_quality": "complete",
+        "atm_oi": 600,                  # >=500 + bid>=0.50 = 20 pts
+        "atm_bid": 0.60,
+    }
+    macro = {"spy": {"regime": "bullish"}, "qqq": {"regime": "bullish"}}  # 20 pts
+    score = deterministic_score(candidate, macro)
+    assert score == 100
+
+
+def test_deterministic_score_partial_data_quality_gets_zero_options_pts():
+    from backend.services.bull import deterministic_score
+    candidate = {
+        "channel_proximity_pct": 0.0,
+        "rsi_slope": 3.0,
+        "volume_ratio": 1.5,
+        "data_quality": "partial",   # 0 options pts
+        "atm_oi": 600,
+        "atm_bid": 0.60,
+    }
+    macro = {"spy": {"regime": "bullish"}, "qqq": {"regime": "bullish"}}
+    score = deterministic_score(candidate, macro)
+    assert score == 80   # 25 + 20 + 15 + 20 + 0
+
+
+def test_deterministic_score_one_bullish_gives_10_macro_pts():
+    from backend.services.bull import deterministic_score
+    candidate = {
+        "channel_proximity_pct": 0.0,
+        "rsi_slope": 0.0,
+        "volume_ratio": 0.5,
+        "data_quality": "price_only",
+    }
+    macro = {"spy": {"regime": "bullish"}, "qqq": {"regime": "neutral"}}
+    score = deterministic_score(candidate, macro)
+    assert score == 35   # 25 + 0 + 0 + 10 + 0
+
+
+def test_stage1_filter_returns_candidates_sorted_by_proximity():
+    from backend.services import bull as bull_svc
+
+    def _snap(sym, slope, prox_pct, rsi_direction="rising"):
+        closes = [100 + i * (0.5 if slope > 0 else -0.5) for i in range(25)]
+        lows   = [c - 5 for c in closes[-20:]]
+        highs  = [c + 5 for c in closes[-20:]]
+        if prox_pct > 0.25:
+            closes[-1] = lows[-1] + (highs[-1] - lows[-1]) * prox_pct
+        return {
+            "symbol": sym,
+            "close": closes[-1],
+            "sma50": closes[-1] * 0.95,
+            "rsi14": 52.0,
+            "volume": 2_000_000.0,
+            "avg_volume_20d": 1_500_000,
+            "closes": closes,
+            "highs": highs,
+            "lows": lows,
+        }
+
+    snapshots = {
+        "LOW_PROX": _snap("LOW_PROX", slope=0.5, prox_pct=0.05),
+        "MID_PROX": _snap("MID_PROX", slope=0.5, prox_pct=0.20),
+        "CHEAP": {
+            "symbol": "CHEAP", "close": 8.0, "avg_volume_20d": 2_000_000,
+            "closes": [8.0] * 25, "highs": [9.0] * 20, "lows": [7.0] * 20,
+        },
+    }
+    original_cp = bull_svc._channel_proximity
+    def mock_cp(closes, highs, lows):
+        c = closes[-1]
+        if c > 100:
+            prox = 0.05 if c > 112 else 0.20
+            return {"slope": 0.5, "proximity_pct": prox, "passes": True}
+        return {"slope": 0.5, "proximity_pct": 0.5, "passes": False}
+    bull_svc._channel_proximity = mock_cp
+
+    original_rs = bull_svc._rsi_slope
+    bull_svc._rsi_slope = lambda c: 1.0
+
+    try:
+        result = bull_svc.stage1_filter(snapshots)
+    finally:
+        bull_svc._channel_proximity = original_cp
+        bull_svc._rsi_slope = original_rs
+
+    symbols = [r["symbol"] for r in result]
+    assert "CHEAP" not in symbols          # price < 15 floor
+    assert "channel_proximity_pct" in result[0]
+
+
+def test_stage1_filter_excludes_failed_channel():
+    from backend.services import bull as bull_svc
+
+    snap = {
+        "symbol": "FLAT", "close": 100.0, "avg_volume_20d": 1_500_000,
+        "volume": 1_500_000,
+        "closes": [100.0] * 25,
+        "highs": [105.0] * 20,
+        "lows": [95.0] * 20,
+    }
+    original_cp = bull_svc._channel_proximity
+    bull_svc._channel_proximity = lambda c, h, l: {"slope": -0.1, "proximity_pct": 0.1, "passes": False}
+    original_rs = bull_svc._rsi_slope
+    bull_svc._rsi_slope = lambda c: 1.0
+    try:
+        result = bull_svc.stage1_filter({"FLAT": snap})
+    finally:
+        bull_svc._channel_proximity = original_cp
+        bull_svc._rsi_slope = original_rs
+    assert result == []

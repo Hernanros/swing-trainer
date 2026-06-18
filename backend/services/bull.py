@@ -192,6 +192,49 @@ def _rsi_slope(closes: list) -> float:
     return (rsi_t2 - rsi_t0) / 2    # slope: change per bar
 
 
+def deterministic_score(candidate: dict, macro: dict) -> int:
+    """
+    Returns 0-100 score from 5 reproducible components.
+    Channel proximity (25), RSI slope (20), Volume ratio (15),
+    Macro alignment (20), Options quality (20).
+    """
+    score = 0
+
+    # Channel proximity: 25 pts linear, 25 at 0%, 0 at 25%+
+    prox = candidate.get("channel_proximity_pct")
+    if prox is not None:
+        score += max(0, int(25 * (1.0 - float(prox) / 0.25)))
+
+    # RSI slope: 20 pts linear, 20 at slope>=3, 0 at slope<=0
+    rsi_slope_val = float(candidate.get("rsi_slope") or 0.0)
+    score += max(0, min(20, int(20 * min(rsi_slope_val, 3.0) / 3.0)))
+
+    # Volume ratio: stepped
+    vol_ratio = float(candidate.get("volume_ratio") or 0.0)
+    if vol_ratio >= 1.2:
+        score += 15
+    elif vol_ratio >= 0.8:
+        score += 10
+
+    # Macro alignment
+    spy_regime = (macro.get("spy") or {}).get("regime", "neutral")
+    qqq_regime = (macro.get("qqq") or {}).get("regime", "neutral")
+    bullish_count = sum(1 for r in [spy_regime, qqq_regime] if r == "bullish")
+    score += 20 if bullish_count == 2 else (10 if bullish_count == 1 else 0)
+
+    # Options quality
+    dq = candidate.get("data_quality", "price_only")
+    if dq == "complete":
+        oi = int(candidate.get("atm_oi") or 0)
+        bid = float(candidate.get("atm_bid") or 0.0)
+        if oi >= 500 and bid >= 0.50:
+            score += 20
+        elif oi >= 200 and bid >= 0.30:
+            score += 12
+
+    return min(100, score)
+
+
 # ── Batch EOD Snapshot (yfinance) ────────────────────────────────────────────
 
 def _batch_eod_snapshots(symbols: list) -> dict:
@@ -236,6 +279,8 @@ def _batch_eod_snapshots(symbols: list) -> dict:
             avg_gain = sum(gains[-14:]) / 14 if len(gains) >= 14 else 0
             avg_loss = sum(losses[-14:]) / 14 if len(losses) >= 14 else 0
             rsi14 = 100.0 if avg_loss == 0 else round(100 - (100 / (1 + avg_gain / avg_loss)), 2)
+            highs = df["High"].tolist()
+            lows = df["Low"].tolist()
             snapshots[sym] = {
                 "symbol": sym,
                 "close": close,
@@ -243,6 +288,9 @@ def _batch_eod_snapshots(symbols: list) -> dict:
                 "rsi14": rsi14,
                 "volume": float(volumes[-1]),
                 "avg_volume_20d": avg_vol_20d,
+                "closes": [float(c) for c in closes[-25:]],
+                "highs": [float(h) for h in highs[-20:]],
+                "lows": [float(l) for l in lows[-20:]],
             }
         except Exception:
             continue
@@ -253,9 +301,10 @@ def _batch_eod_snapshots(symbols: list) -> dict:
 
 def stage1_filter(snapshots: dict) -> list:
     """
-    Stage 1: technical pre-filter.
-    Filters: close > 15, avg_volume_20d > 500_000, close > sma50, RSI 30-75.
-    Returns top 25 by volume — enough for Claude to score without being overwhelming.
+    Stage 1: channel-proximity filter.
+    Passes: close > $15, avg_volume_20d > 500k, upward channel (slope > 0),
+    price in bottom 25% of channel (proximity_pct <= 0.25), RSI slope positive.
+    Returns top 20 sorted by channel proximity ascending (closest to support first).
     """
     passed = []
     for sym, snap in snapshots.items():
@@ -265,19 +314,27 @@ def stage1_filter(snapshots: dict) -> list:
             continue
         if (snap.get("avg_volume_20d") or 0) < 500_000:
             continue
-        sma50 = snap.get("sma50")
-        if not sma50 or snap["close"] <= sma50:
+        closes = snap.get("closes", [])
+        highs = snap.get("highs", [])
+        lows = snap.get("lows", [])
+        if len(closes) < 22 or len(highs) < 20 or len(lows) < 20:
             continue
-        # Reject overextended stocks (>20% above SMA50 = too risky for credit spread
-        # OR indicates bad data from yfinance batch download)
-        if snap["close"] > sma50 * 1.20:
+        channel = _channel_proximity(closes, highs, lows)
+        if not channel["passes"]:
             continue
-        rsi = snap.get("rsi14", 50)
-        if rsi < 30 or rsi > 75:
+        rsi_slope_val = _rsi_slope(closes)
+        if rsi_slope_val <= 0:
             continue
-        passed.append(snap)
-    passed.sort(key=lambda x: x.get("avg_volume_20d", 0), reverse=True)
-    return passed[:15]
+        volume_ratio = (snap.get("volume") or 0) / max(snap.get("avg_volume_20d") or 1, 1)
+        passed.append({
+            **snap,
+            "channel_slope": channel["slope"],
+            "channel_proximity_pct": channel["proximity_pct"],
+            "rsi_slope": rsi_slope_val,
+            "volume_ratio": volume_ratio,
+        })
+    passed.sort(key=lambda x: x.get("channel_proximity_pct", 1.0))
+    return passed[:20]
 
 
 # ── Stage 2 Screener ──────────────────────────────────────────────────────────
