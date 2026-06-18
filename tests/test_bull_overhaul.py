@@ -60,3 +60,60 @@ def test_get_nearest_weekly_expiry_skips_too_close_expiry():
     with patch("yfinance.Ticker", return_value=mock_ticker):
         result = provider.get_nearest_weekly_expiry("AAPL")
     assert result is None
+
+
+# ── Task 3: get_chain ──────────────────────────────────────────────────────────
+
+def test_get_chain_returns_empty_dict_on_exception():
+    from backend.services.data import YFinanceOptionsProvider
+    provider = YFinanceOptionsProvider()
+    mock_ticker = MagicMock()
+    mock_ticker.option_chain.side_effect = Exception("network error")
+    with patch("yfinance.Ticker", return_value=mock_ticker):
+        result = provider.get_chain("FAKE", "2026-07-11")
+    assert result == {"strikes": [], "puts": []}
+
+
+def test_get_chain_returns_atm_put_data():
+    import pandas as pd
+    from backend.services.data import YFinanceOptionsProvider
+    provider = YFinanceOptionsProvider()
+    puts_df = pd.DataFrame([
+        {"strike": 180.0, "bid": 1.20, "ask": 1.40, "openInterest": 500, "impliedVolatility": 0.28},
+        {"strike": 185.0, "bid": 0.85, "ask": 1.00, "openInterest": 800, "impliedVolatility": 0.32},
+        {"strike": 190.0, "bid": 0.40, "ask": 0.55, "openInterest": 300, "impliedVolatility": 0.35},
+    ])
+    mock_chain = MagicMock()
+    mock_chain.puts = puts_df
+    hist_df = pd.DataFrame({"Close": [184.0, 185.5]})
+    mock_ticker = MagicMock()
+    mock_ticker.option_chain.return_value = mock_chain
+    mock_ticker.history.return_value = hist_df
+    with patch("yfinance.Ticker", return_value=mock_ticker):
+        result = provider.get_chain("AAPL", "2026-07-11")
+    assert len(result["puts"]) == 3
+    atm = next(p for p in result["puts"] if p["strike"] == 185.0)
+    assert atm["bid"] == 0.85
+    assert atm["oi"] == 800
+    assert atm["iv"] > 0
+
+
+def test_get_chain_estimates_iv_when_zero():
+    import pandas as pd
+    from backend.services.data import YFinanceOptionsProvider
+    from datetime import date, timedelta
+    provider = YFinanceOptionsProvider()
+    expiry = (date.today() + timedelta(days=7)).isoformat()
+    puts_df = pd.DataFrame([
+        {"strike": 100.0, "bid": 1.50, "ask": 1.70, "openInterest": 400, "impliedVolatility": 0.0},
+    ])
+    mock_chain = MagicMock()
+    mock_chain.puts = puts_df
+    hist_df = pd.DataFrame({"Close": [99.0, 100.0]})
+    mock_ticker = MagicMock()
+    mock_ticker.option_chain.return_value = mock_chain
+    mock_ticker.history.return_value = hist_df
+    with patch("yfinance.Ticker", return_value=mock_ticker):
+        result = provider.get_chain("TEST", expiry)
+    atm = result["puts"][0]
+    assert atm["iv"] > 0, "Should estimate IV from bid/ask mid via B-S approximation"
