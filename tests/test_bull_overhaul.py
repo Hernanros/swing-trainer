@@ -381,3 +381,31 @@ def test_run_pipeline_returns_expected_shape(monkeypatch):
     assert "data_quality" in c
     assert "setup_brief" in c
     assert isinstance(c["score"], int)
+
+
+# ── Task 7: generate_setup_brief ──────────────────────────────────────────────
+
+def test_generate_setup_brief_returns_fallback_without_api_key():
+    import backend.services.claude as claude_svc
+    candidate = {"symbol": "AAPL", "close": 185.0, "channel_proximity_pct": 0.10, "rsi_slope": 1.5, "sector": "XLK", "sector_label": "strong"}
+    macro = {"spy": {"regime": "bullish"}, "qqq": {"regime": "bullish"}}
+    with patch.object(claude_svc, "_api_key", ""):
+        result = claude_svc.generate_setup_brief(candidate, macro, [])
+    assert isinstance(result, str)
+    assert len(result) > 0
+
+
+def test_generate_setup_brief_calls_claude_sonnet():
+    import backend.services.claude as claude_svc
+    candidate = {"symbol": "MSFT", "close": 420.0, "channel_proximity_pct": 0.08, "rsi_slope": 2.1, "sector": "XLK", "sector_label": "strong"}
+    macro = {"spy": {"regime": "bullish"}, "qqq": {"regime": "bullish"}}
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock(text="MSFT is testing channel support near $420.")]
+    mock_client = MagicMock()
+    mock_client.messages.create.return_value = mock_response
+    with patch.object(claude_svc, "_api_key", "test-key"), patch("anthropic.Anthropic", return_value=mock_client):
+        result = claude_svc.generate_setup_brief(candidate, macro, [])
+    assert result == "MSFT is testing channel support near $420."
+    call_kwargs = mock_client.messages.create.call_args[1]
+    assert call_kwargs["model"] == "claude-sonnet-4-6"
+    assert call_kwargs["max_tokens"] == 150

@@ -390,5 +390,44 @@ def generate_pattern_analysis(context: str) -> list:
 
 
 def generate_setup_brief(candidate: dict, macro: dict, sectors: list) -> str:
-    """Stub — replaced by full implementation in Task 7."""
-    return f"[Setup brief — {candidate.get('symbol', '?')}]"
+    """
+    2-3 sentence qualitative brief for a complete bull put spread candidate.
+    Uses claude-sonnet-4-6, max_tokens=150. Returns fallback string if no API key.
+    """
+    if not _api_key:
+        return f"[Setup brief unavailable — set ANTHROPIC_API_KEY] ({candidate.get('symbol', '?')})"
+    sym = candidate.get("symbol", "?")
+    close = candidate.get("close", 0)
+    proximity = candidate.get("channel_proximity_pct", 0) or 0
+    rsi_slope_val = candidate.get("rsi_slope", 0) or 0
+    sector = candidate.get("sector", "unknown")
+    sector_label = candidate.get("sector_label", "neutral")
+    spy_regime = (macro.get("spy") or {}).get("regime", "neutral")
+    qqq_regime = (macro.get("qqq") or {}).get("regime", "neutral")
+    sector_note = next(
+        (f"{s['symbol']} sector is {s.get('label', 'neutral')} ({s.get('pct_vs_20d', 0):+.1f}% vs 20d)"
+         for s in sectors if s.get("symbol") == sector),
+        f"Sector {sector}: {sector_label}",
+    )
+    prompt = (
+        f"Write a 2-3 sentence qualitative brief for a bull put spread on {sym}.\n\n"
+        f"Setup data:\n"
+        f"- ${close:.2f}, {proximity:.0%} into upward channel (near lower band)\n"
+        f"- RSI slope {rsi_slope_val:+.2f} (positive = turning up)\n"
+        f"- Macro: SPY {spy_regime}, QQQ {qqq_regime}\n"
+        f"- {sector_note}\n\n"
+        f"Focus on why the channel position matters today, what RSI slope suggests, "
+        f"and one thing to watch. Plain text only. No score, no rating."
+    )
+    try:
+        from anthropic import Anthropic
+        client = Anthropic(api_key=_api_key)
+        msg = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=150,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return msg.content[0].text.strip()
+    except Exception as e:
+        _log.error("generate_setup_brief failed for %s: %s", sym, e)
+        return f"[Brief unavailable — {sym}]"
