@@ -251,6 +251,36 @@ def get_paper_trades(
     }
 
 
+@router.post("/paper-trades/manual")
+def manually_log_paper_trade(
+    body: dict,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from backend.models import PaperBullTrade
+    now = datetime.now(timezone.utc)
+    trade = PaperBullTrade(
+        user_id=current_user.id,
+        scan_id=None,
+        symbol=body.get("symbol", ""),
+        logged_at=now,
+        expiry=body.get("expiry", ""),
+        short_strike=float(body.get("short_strike") or 0),
+        long_strike=float(body.get("long_strike") or 0),
+        premium_credit=float(body.get("premium_credit") or 0),
+        score=int(body.get("score") or 0),
+        data_quality=body.get("data_quality", "complete"),
+        channel_proximity=body.get("channel_proximity"),
+        rsi_slope=body.get("rsi_slope"),
+        macro_regime=body.get("macro_regime"),
+        auto_logged=False,
+    )
+    db.add(trade)
+    db.commit()
+    db.refresh(trade)
+    return {"id": trade.id, "symbol": trade.symbol, "logged_at": trade.logged_at.isoformat()}
+
+
 @router.post("/chat")
 def bull_chat(
     body: BullChatRequest,

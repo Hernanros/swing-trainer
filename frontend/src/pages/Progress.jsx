@@ -125,6 +125,140 @@ function PaperAccountCard({ data, editing, balanceInput, onEditClick, onBalanceC
   )
 }
 
+function BullPerformanceSection() {
+  const [open, setOpen]             = useState(false)
+  const [kpis, setKpis]             = useState(null)
+  const [trades, setTrades]         = useState(null)
+  const [loadingData, setLoadingData] = useState(false)
+
+  async function handleToggle() {
+    setOpen(o => !o)
+    if (!kpis && !loadingData) {
+      setLoadingData(true)
+      try {
+        const [k, t] = await Promise.all([
+          api.bull.kpis().catch(() => null),
+          api.bull.paperTrades().catch(() => null),
+        ])
+        setKpis(k)
+        setTrades(t)
+      } finally {
+        setLoadingData(false)
+      }
+    }
+  }
+
+  const bands = kpis?.score_edge
+    ? [
+        { label: 'Score ≥80', ...kpis.score_edge.high, color: 'var(--green)' },
+        { label: 'Score 60–79', ...kpis.score_edge.mid, color: 'var(--accent)' },
+        { label: 'Score <60', ...kpis.score_edge.low, color: 'var(--muted)' },
+      ]
+    : []
+
+  return (
+    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 20, marginTop: 16 }}>
+      <button
+        onClick={handleToggle}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left' }}
+      >
+        <span style={{ fontWeight: 700, color: 'var(--text)', fontSize: 14 }}>Bull Performance</span>
+        <span style={{ color: 'var(--muted)', fontSize: 11 }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div style={{ marginTop: 16 }}>
+          {loadingData && <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>}
+
+          {kpis && !loadingData && (
+            <>
+              {kpis.total_trades === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--muted)' }}>No resolved paper trades yet. Data appears after first trades expire.</p>
+              ) : (
+                <>
+                  <div style={{ marginBottom: 16 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 10 }}>WIN RATE BY SCORE BAND</div>
+                    {bands.map(b => (
+                      <div key={b.label} style={{ marginBottom: 8 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text2)', marginBottom: 3 }}>
+                          <span>{b.label}</span>
+                          <span style={{ color: b.color, fontWeight: 700 }}>
+                            {Math.round((b.win_rate ?? 0) * 100)}% <span style={{ color: 'var(--muted)', fontWeight: 400 }}>({b.count} trades)</span>
+                          </span>
+                        </div>
+                        <div style={{ height: 6, background: 'var(--surface2)', borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ width: `${Math.round((b.win_rate ?? 0) * 100)}%`, height: '100%', background: b.color, borderRadius: 3 }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {trades && !loadingData && trades.total > 0 && (
+            <div style={{ overflowX: 'auto' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 8 }}>PAPER TRADE LOG</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ color: 'var(--muted)', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ padding: '4px 8px', fontWeight: 500 }}>Date</th>
+                    <th style={{ padding: '4px 8px', fontWeight: 500 }}>Ticker</th>
+                    <th style={{ padding: '4px 8px', fontWeight: 500 }}>Spread</th>
+                    <th style={{ padding: '4px 8px', fontWeight: 500 }}>Credit</th>
+                    <th style={{ padding: '4px 8px', fontWeight: 500 }}>Score</th>
+                    <th style={{ padding: '4px 8px', fontWeight: 500 }}>Outcome</th>
+                    <th style={{ padding: '4px 8px', fontWeight: 500 }}>P&L</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {trades.trades.map(t => {
+                    const outcomeColor = t.outcome === 'win' ? 'var(--green)' : t.outcome === 'loss' ? 'var(--red)' : 'var(--muted)'
+                    const pnlColor = t.pnl == null ? 'var(--muted)' : t.pnl >= 0 ? 'var(--green)' : 'var(--red)'
+                    return (
+                      <tr key={t.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                        <td style={{ padding: '6px 8px', color: 'var(--muted)' }}>
+                          {t.logged_at ? t.logged_at.slice(0, 10) : '—'}
+                        </td>
+                        <td style={{ padding: '6px 8px', color: 'var(--text)', fontWeight: 700 }}>{t.symbol}</td>
+                        <td style={{ padding: '6px 8px', color: 'var(--text2)', fontFamily: 'monospace' }}>
+                          {t.short_strike && t.long_strike ? `$${t.short_strike}/$${t.long_strike}` : '—'}
+                        </td>
+                        <td style={{ padding: '6px 8px', color: 'var(--text2)', fontFamily: 'monospace' }}>
+                          {t.premium_credit != null ? `$${t.premium_credit.toFixed(2)}` : '—'}
+                        </td>
+                        <td style={{ padding: '6px 8px', fontFamily: 'monospace', color: t.score >= 70 ? 'var(--green)' : t.score >= 50 ? 'var(--accent)' : 'var(--muted)' }}>
+                          {t.score ?? '—'}
+                        </td>
+                        <td style={{ padding: '6px 8px', color: outcomeColor, textTransform: 'capitalize', fontWeight: t.outcome ? 600 : 400 }}>
+                          {t.outcome ?? 'open'}
+                        </td>
+                        <td style={{ padding: '6px 8px', fontFamily: 'monospace', color: pnlColor }}>
+                          {t.pnl != null ? (t.pnl >= 0 ? `+$${t.pnl.toFixed(0)}` : `-$${Math.abs(t.pnl).toFixed(0)}`) : '—'}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              {trades.total > trades.per_page && (
+                <p style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
+                  Showing {trades.trades.length} of {trades.total} trades
+                </p>
+              )}
+            </div>
+          )}
+
+          <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--surface2)', borderRadius: 6, fontSize: 12, color: 'var(--muted)' }}>
+            🔒 ML Confidence Score — unlocks after 50 resolved paper trades
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function Progress() {
   const { user } = useUser()
   const [stats, setStats]             = useState(null)
@@ -423,6 +557,8 @@ export default function Progress() {
           )}
         </div>
       )}
+
+      <BullPerformanceSection />
     </div>
   )
 }

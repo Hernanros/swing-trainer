@@ -1,16 +1,55 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 
+const QUALITY_ORDER = { complete: 0, partial: 1, price_only: 2 }
+const QUALITY_DOT   = { complete: '●', partial: '◑', price_only: '○' }
+const QUALITY_COLOR = { complete: 'var(--green)', partial: 'var(--accent)', price_only: 'var(--muted)' }
+
+function sortCandidates(candidates) {
+  return [...candidates].sort((a, b) => {
+    const qa = QUALITY_ORDER[a.data_quality] ?? 3
+    const qb = QUALITY_ORDER[b.data_quality] ?? 3
+    if (qa !== qb) return qa - qb
+    return (b.score ?? 0) - (a.score ?? 0)
+  })
+}
+
+function scoreColor(score) {
+  if (score >= 70) return 'var(--green)'
+  if (score >= 50) return 'var(--accent)'
+  return 'var(--muted)'
+}
+
+function computeComponentScores(c) {
+  const pct = c.channel_proximity_pct ?? 1
+  const channel_pts = Math.max(0, Math.round(Math.max(0, (0.25 - pct) / 0.25) * 25))
+  const slope = c.rsi_slope ?? 0
+  const rsi_pts = Math.max(0, Math.min(20, slope > 0 ? Math.round((Math.min(slope, 3) / 3) * 20) : 0))
+  const vr = c.volume_ratio ?? 0
+  const vol_pts = vr >= 1.2 ? 15 : vr >= 0.8 ? 10 : 0
+  const dq = c.data_quality
+  let options_pts = 0
+  if (dq === 'complete') {
+    const bid = c.atm_bid ?? 0
+    const oi  = c.atm_oi  ?? 0
+    options_pts = bid >= 0.50 && oi >= 500 ? 20 : bid >= 0.30 && oi >= 200 ? 12 : 0
+  }
+  const macro_pts = Math.max(0, Math.min(20, (c.score ?? 0) - channel_pts - rsi_pts - vol_pts - options_pts))
+  return { channel_pts, rsi_pts, vol_pts, macro_pts, options_pts }
+}
+
 export default function Bull() {
-  const [scan, setScan] = useState(null)
-  const [profile, setProfile] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [running, setRunning] = useState(false)
+  const [scan, setScan]               = useState(null)
+  const [profile, setProfile]         = useState(null)
+  const [kpis, setKpis]               = useState(null)
+  const [loading, setLoading]         = useState(true)
+  const [error, setError]             = useState(null)
+  const [running, setRunning]         = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [profileForm, setProfileForm] = useState({ account_size: '', risk_per_trade_pct: 1.0, max_contracts: 5 })
   const [savingProfile, setSavingProfile] = useState(false)
-  const [chatInput, setChatInput] = useState('')
+  const [kpiOpen, setKpiOpen]         = useState(false)
+  const [chatInput, setChatInput]     = useState('')
   const [chatHistory, setChatHistory] = useState([])
   const [chatLoading, setChatLoading] = useState(false)
 
@@ -18,8 +57,10 @@ export default function Bull() {
     Promise.all([
       api.bull.latestScan().catch(() => null),
       api.bull.getProfile().catch(() => null),
-    ]).then(([scanData, profileData]) => {
+      api.bull.kpis().catch(() => null),
+    ]).then(([scanData, profileData, kpisData]) => {
       setScan(scanData)
+      setKpis(kpisData)
       setProfile(profileData)
       if (profileData) {
         setProfileForm({
@@ -37,8 +78,12 @@ export default function Bull() {
     setError(null)
     try {
       await api.bull.runScan()
-      const fresh = await api.bull.latestScan()
+      const [fresh, freshKpis] = await Promise.all([
+        api.bull.latestScan(),
+        api.bull.kpis().catch(() => null),
+      ])
       setScan(fresh)
+      setKpis(freshKpis)
     } catch (e) {
       setError(e.message || 'Scan failed')
     } finally {
@@ -81,13 +126,11 @@ export default function Bull() {
     }
   }
 
-  if (loading) return (
-    <div style={{ padding: 32, color: 'var(--muted)' }}>Loading scan…</div>
-  )
+  if (loading) return <div style={{ padding: 32, color: 'var(--muted)' }}>Loading scan…</div>
 
   return (
-    <div style={{ padding: '24px 28px', maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+    <div style={{ padding: '24px 28px', maxWidth: 980, margin: '0 auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <h1 style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)', margin: 0 }}>BULL ASSISTANT</h1>
           {scan && (
@@ -113,9 +156,9 @@ export default function Bull() {
         </div>
       </div>
 
-      {error && (
-        <p style={{ color: 'var(--red)', fontSize: 13, marginBottom: 16 }}>{error}</p>
-      )}
+      {error && <p style={{ color: 'var(--red)', fontSize: 13, marginBottom: 16 }}>{error}</p>}
+
+      <KpiStrip kpis={kpis} open={kpiOpen} onToggle={() => setKpiOpen(o => !o)} />
 
       {!scan ? (
         <NoScanState profile={profile} onRunScan={handleRunScan} running={running} />
@@ -124,7 +167,6 @@ export default function Bull() {
           <MacroBar macro={scan.macro} />
           <SectorStrip sectors={scan.sectors} />
           <CandidatesTable candidates={scan.candidates} />
-          <AssistantPlaybookPanel />
           <ChatPanel
             history={chatHistory}
             input={chatInput}
@@ -143,6 +185,88 @@ export default function Bull() {
           onClose={() => setShowProfile(false)}
           saving={savingProfile}
         />
+      )}
+    </div>
+  )
+}
+
+function KpiTile({ label, value, note, color }) {
+  return (
+    <div>
+      <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: color || 'var(--text)', fontFamily: 'monospace' }}>{value ?? '—'}</div>
+      {note && <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 2 }}>{note}</div>}
+    </div>
+  )
+}
+
+function KpiStrip({ kpis, open, onToggle }) {
+  const wr = kpis ? Math.round((kpis.win_rate ?? 0) * 100) : null
+  const exp = kpis?.expectancy_per_dollar ?? null
+  const hbWr = kpis ? Math.round(((kpis.score_edge?.high?.win_rate) ?? 0) * 100) : null
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <button
+        onClick={onToggle}
+        style={{ background: 'var(--surface2)', border: '1px solid var(--border2)', borderRadius: open ? '6px 6px 0 0' : 6, padding: '7px 14px', fontSize: 12, color: 'var(--text2)', cursor: 'pointer', width: '100%', textAlign: 'left', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+      >
+        <span style={{ fontWeight: 700, letterSpacing: '0.06em', color: 'var(--muted)', fontSize: 10 }}>
+          PERFORMANCE
+        </span>
+        {kpis && !open && (
+          <span style={{ fontSize: 12, color: 'var(--text2)', display: 'flex', gap: 18 }}>
+            <span>{kpis.total_trades} trades</span>
+            <span style={{ color: wr >= 60 ? 'var(--green)' : 'var(--muted)' }}>{wr}% WR</span>
+            {exp != null && (
+              <span style={{ color: exp >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                {exp >= 0 ? '+' : ''}{exp.toFixed(2)} exp/$
+              </span>
+            )}
+            {hbWr != null && (
+              <span style={{ color: 'var(--muted)' }}>≥80: {hbWr}% WR</span>
+            )}
+          </span>
+        )}
+        <span style={{ color: 'var(--muted)', fontSize: 11 }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <div style={{ background: 'var(--surface2)', borderRadius: '0 0 6px 6px', padding: '16px 20px', border: '1px solid var(--border2)', borderTop: 'none' }}>
+          {kpis && kpis.total_trades > 0 ? (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginBottom: 14 }}>
+                <KpiTile
+                  label="PAPER TRADES"
+                  value={kpis.total_trades}
+                  note={`${kpis.open_trades} open`}
+                />
+                <KpiTile
+                  label="WIN RATE"
+                  value={`${wr}%`}
+                  color={wr >= 60 ? 'var(--green)' : 'var(--muted)'}
+                />
+                <KpiTile
+                  label="EXP / $1 RISKED"
+                  value={exp != null ? (exp >= 0 ? `+${exp.toFixed(2)}` : exp.toFixed(2)) : '—'}
+                  color={exp != null && exp >= 0 ? 'var(--green)' : 'var(--red)'}
+                />
+                <KpiTile
+                  label="SCORE ≥80 WR"
+                  value={`${hbWr}%`}
+                  note={`${kpis.score_edge?.high?.count ?? 0} trades`}
+                  color={hbWr >= 70 ? 'var(--green)' : 'var(--muted)'}
+                />
+              </div>
+              <a href="/progress" style={{ fontSize: 11, color: 'var(--accent)', textDecoration: 'none' }}>
+                Full breakdown in Progress →
+              </a>
+            </>
+          ) : (
+            <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0 }}>
+              No resolved paper trades yet — data appears after first trades expire.
+            </p>
+          )}
+        </div>
       )}
     </div>
   )
@@ -176,12 +300,12 @@ function MacroBar({ macro }) {
   if (!macro) return null
   const spy = macro.spy || {}
   const qqq = macro.qqq || {}
-  const regimeColor = r => r === 'bullish' ? '#4c4' : r === 'bearish' ? 'var(--red)' : 'var(--muted)'
+  const regimeColor = r => r === 'bullish' ? 'var(--green)' : r === 'bearish' ? 'var(--red)' : 'var(--muted)'
   const regimeArrow = r => r === 'bullish' ? '▲' : r === 'bearish' ? '▼' : '→'
   return (
-    <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+    <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
       {[['SPY', spy.regime], ['QQQ', qqq.regime]].map(([sym, regime]) => (
-        <div key={sym} style={{ background: 'var(--surface2)', borderRadius: 6, padding: '6px 14px', fontSize: 12, color: regimeColor(regime) }}>
+        <div key={sym} style={{ background: 'var(--surface2)', borderRadius: 6, padding: '5px 12px', fontSize: 12, color: regimeColor(regime) }}>
           <span style={{ fontWeight: 700 }}>{sym}</span> {regimeArrow(regime)} {regime || 'unknown'}
         </div>
       ))}
@@ -191,10 +315,10 @@ function MacroBar({ macro }) {
 
 function SectorStrip({ sectors }) {
   if (!sectors || sectors.length === 0) return null
-  const labelColor = l => l === 'strong' ? '#4c4' : l === 'weak' ? 'var(--red)' : 'var(--muted)'
+  const labelColor = l => l === 'strong' ? 'var(--green)' : l === 'weak' ? 'var(--red)' : 'var(--muted)'
   const labelArrow = l => l === 'strong' ? '▲' : l === 'weak' ? '▼' : '→'
   return (
-    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 20 }}>
+    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 18 }}>
       {sectors.map(s => (
         <div key={s.symbol} style={{ background: 'var(--surface2)', borderRadius: 4, padding: '3px 8px', fontSize: 11, color: labelColor(s.label) }}>
           {s.symbol} {labelArrow(s.label)}
@@ -207,143 +331,182 @@ function SectorStrip({ sectors }) {
   )
 }
 
-function ScoreBadge({ value, label, primary }) {
-  if (value == null || value === '—') return null
-  const n = typeof value === 'number' ? value : parseFloat(value)
-  const color = n >= 7 ? 'var(--green)' : n >= 4.5 ? 'var(--accent)' : 'var(--red)'
-  if (primary) return (
-    <span style={{ fontWeight: 700, color, fontSize: 14 }}>{n.toFixed(1)}</span>
-  )
+function MiniBar({ label, pts, max }) {
+  const pct = Math.min(100, max > 0 ? Math.round((pts / max) * 100) : 0)
+  const color = pct >= 70 ? 'var(--green)' : pct >= 40 ? 'var(--accent)' : 'var(--muted)'
   return (
-    <span style={{ fontSize: 10, color: 'var(--muted)', background: 'var(--surface3,var(--surface2))', borderRadius: 4, padding: '1px 5px', border: '1px solid var(--border2)', whiteSpace: 'nowrap' }}>
-      AI <span style={{ color, fontWeight: 600 }}>{n.toFixed(1)}</span>
-    </span>
+    <div style={{ marginBottom: 7 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--muted)', marginBottom: 3 }}>
+        <span>{label}</span>
+        <span style={{ color }}>{pts}/{max}</span>
+      </div>
+      <div style={{ height: 4, background: 'var(--surface)', borderRadius: 2, overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 2 }} />
+      </div>
+    </div>
+  )
+}
+
+function StrikeCard({ label, value }) {
+  return (
+    <div style={{ background: 'var(--surface)', borderRadius: 6, padding: '8px 10px', textAlign: 'center' }}>
+      <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.05em', marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', fontFamily: 'monospace' }}>{value ?? '—'}</div>
+    </div>
+  )
+}
+
+function ExpandedRow({ c, logged, onLog, onDismiss }) {
+  const scores = computeComponentScores(c)
+  const logState = logged[c.symbol]
+
+  return (
+    <div style={{ background: 'var(--surface2)', padding: '14px 16px', marginBottom: 2, borderBottom: '1px solid var(--border2)' }}>
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 10 }}>
+          SCORE BREAKDOWN — {c.score}/100
+        </div>
+        <MiniBar label="Channel Proximity" pts={scores.channel_pts} max={25} />
+        <MiniBar label="RSI Slope" pts={scores.rsi_pts} max={20} />
+        <MiniBar label="Volume Ratio" pts={scores.vol_pts} max={15} />
+        <MiniBar label="Macro Alignment" pts={scores.macro_pts} max={20} />
+        <MiniBar label="Options Quality" pts={scores.options_pts} max={20} />
+      </div>
+
+      {c.setup_brief && (
+        <div style={{ fontSize: 13, color: 'var(--text2)', lineHeight: 1.65, marginBottom: 14, padding: '10px 14px', background: 'var(--surface)', borderRadius: 6, borderLeft: '3px solid var(--accent)' }}>
+          {c.setup_brief}
+        </div>
+      )}
+      {!c.setup_brief && c.data_quality !== 'price_only' && (
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 14 }}>No AI brief — options data incomplete at scan time.</div>
+      )}
+
+      {c.data_quality !== 'price_only' && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 12 }}>
+          <StrikeCard label="SHORT PUT" value={c.short_strike ? `$${c.short_strike}` : '—'} />
+          <StrikeCard label="LONG PUT" value={c.long_strike ? `$${c.long_strike}` : '—'} />
+          <StrikeCard label="EXPIRY" value={c.expiry ?? '—'} />
+          <StrikeCard label="CREDIT" value={c.estimated_credit ? `$${c.estimated_credit.toFixed(2)}` : '—'} />
+          <StrikeCard label="IV" value={c.atm_iv ? `${(c.atm_iv * 100).toFixed(0)}%` : '—'} />
+        </div>
+      )}
+
+      {c.data_quality === 'partial' && (
+        <div style={{ fontSize: 12, color: 'var(--accent)', marginBottom: 12, padding: '6px 10px', background: 'rgba(255,180,0,0.07)', borderRadius: 5, border: '1px solid rgba(255,180,0,0.2)' }}>
+          ⚠ Options data incomplete — verify in OptionStrat before trading.
+        </div>
+      )}
+      {c.data_quality === 'price_only' && (
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, padding: '6px 10px', background: 'var(--surface)', borderRadius: 5 }}>
+          Options data unavailable — verify in OptionStrat before trading.
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        {logState === 'done' ? (
+          <span style={{ fontSize: 12, color: 'var(--green)' }}>✓ Logged to paper trades</span>
+        ) : logState === 'error' ? (
+          <span style={{ fontSize: 12, color: 'var(--red)' }}>Could not log — try again</span>
+        ) : (
+          <button
+            onClick={() => onLog(c)}
+            disabled={logState === 'logging'}
+            style={{ background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 5, color: 'var(--accent)', fontSize: 12, padding: '5px 12px', cursor: logState === 'logging' ? 'not-allowed' : 'pointer', opacity: logState === 'logging' ? 0.6 : 1 }}
+          >
+            {logState === 'logging' ? 'Logging…' : 'Auto-log Paper Trade'}
+          </button>
+        )}
+        <button
+          onClick={onDismiss}
+          style={{ background: 'none', border: '1px solid var(--border2)', borderRadius: 5, color: 'var(--muted)', fontSize: 12, padding: '5px 12px', cursor: 'pointer' }}
+        >
+          Dismiss
+        </button>
+      </div>
+    </div>
   )
 }
 
 function CandidatesTable({ candidates }) {
   const [expanded, setExpanded] = useState(null)
+  const [logged, setLogged] = useState({})
+
   if (!candidates || candidates.length === 0) {
-    return (
-      <div style={{ padding: '20px 0', color: 'var(--muted)', fontSize: 13 }}>
-        No setups met criteria today — market conditions may be unfavorable.
-      </div>
-    )
+    return <div style={{ padding: '20px 0', color: 'var(--muted)', fontSize: 13 }}>No setups met criteria today — market conditions may be unfavorable.</div>
   }
+
+  const sorted = sortCandidates(candidates)
+  const COL = '72px 64px 90px 72px 110px 1fr'
+
+  async function handleLog(c) {
+    setLogged(l => ({ ...l, [c.symbol]: 'logging' }))
+    try {
+      await api.bull.logPaperTrade({
+        symbol: c.symbol,
+        expiry: c.expiry,
+        short_strike: c.short_strike,
+        long_strike: c.long_strike,
+        premium_credit: c.estimated_credit,
+        score: c.score,
+        data_quality: c.data_quality,
+        channel_proximity: c.channel_proximity_pct,
+        rsi_slope: c.rsi_slope,
+      })
+      setLogged(l => ({ ...l, [c.symbol]: 'done' }))
+    } catch {
+      setLogged(l => ({ ...l, [c.symbol]: 'error' }))
+    }
+  }
+
   return (
-    <div style={{ marginBottom: 24 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '60px 65px 65px 70px 80px 50px 1fr', gap: '0 12px', padding: '4px 8px', fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.05em', borderBottom: '1px solid var(--border2)', marginBottom: 4 }}>
-        <span>TICKER</span>
-        <span>YOUR SCORE</span>
-        <span>AI SCORE</span>
-        <span>CONTRACTS</span><span>MAX LOSS</span><span>IV</span><span>SECTOR</span>
+    <div style={{ marginBottom: 28 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: COL, gap: '0 12px', padding: '4px 8px', fontSize: 10, color: 'var(--muted)', fontWeight: 700, letterSpacing: '0.06em', borderBottom: '1px solid var(--border2)', marginBottom: 2 }}>
+        <span>TICKER</span><span>SCORE</span><span>CHANNEL</span><span>RSI↑</span><span>OPTIONS</span><span>BRIEF</span>
       </div>
-      {candidates.map((c, i) => (
-        <div key={c.symbol}>
-          <div
-            onClick={() => setExpanded(expanded === i ? null : i)}
-            style={{ display: 'grid', gridTemplateColumns: '60px 65px 65px 70px 80px 50px 1fr', gap: '0 12px', padding: '8px 8px', fontSize: 13, cursor: 'pointer', borderRadius: 4, background: i === 0 ? 'var(--surface2)' : 'transparent', color: i === 0 ? 'var(--accent)' : 'var(--text2)', borderBottom: '1px solid var(--border2)', alignItems: 'center' }}
-          >
-            <span style={{ fontWeight: i === 0 ? 700 : 400 }}>{c.symbol}</span>
-            <span>{c.score != null ? <ScoreBadge value={c.score} primary /> : <span style={{ color: 'var(--muted)' }}>—</span>}</span>
-            <span><ScoreBadge value={c.asst_score} primary /></span>
-            <span>{c.contracts ?? '—'}</span>
-            <span>${c.max_loss_per_contract != null ? c.max_loss_per_contract.toLocaleString() : '—'}</span>
-            <span>{c.ivr != null ? Math.round(c.ivr) + '%' : c.iv != null ? (c.iv * 100).toFixed(0) + '%' : '—'}</span>
-            <span style={{ color: 'var(--muted)', fontSize: 11 }}>{c.sector || '—'} {c.sector_label === 'strong' ? '▲' : c.sector_label === 'weak' ? '▼' : '→'}</span>
-          </div>
-          {expanded === i && (
-            <div style={{ background: 'var(--surface2)', borderRadius: 4, padding: '10px 12px', margin: '0 0 4px', fontSize: 12, color: 'var(--text2)', lineHeight: 1.5, display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {c.score != null && (
-                <div><strong style={{ color: 'var(--accent)' }}>Your playbook ({c.score?.toFixed(1)}/10):</strong> {c.rationale || '—'}</div>
-              )}
-              {c.asst_rationale && (
-                <div><strong style={{ color: 'var(--muted)' }}>Bull AI ({c.asst_score?.toFixed(1)}/10):</strong> {c.asst_rationale}</div>
-              )}
-              <span style={{ color: 'var(--muted)', fontSize: 11 }}>
-                Risk budget: ${c.risk_dollars?.toLocaleString() ?? '—'} · ATM strike: ${c.atm_strike ?? '—'} · Expiry: {c.nearest_expiry ?? '—'}
+      {sorted.map((c, i) => {
+        const isExpanded = expanded === i
+        const isGrayed = c.data_quality === 'price_only'
+        const channelPct = c.channel_proximity_pct != null ? Math.round(c.channel_proximity_pct * 100) : null
+        const channelColor = channelPct != null ? (channelPct < 15 ? 'var(--green)' : channelPct < 25 ? 'var(--accent)' : 'var(--muted)') : 'var(--muted)'
+        const rsiColor = (c.rsi_slope ?? 0) > 0 ? 'var(--green)' : 'var(--muted)'
+
+        return (
+          <div key={c.symbol}>
+            <div
+              onClick={() => setExpanded(isExpanded ? null : i)}
+              style={{
+                display: 'grid', gridTemplateColumns: COL, gap: '0 12px',
+                padding: '9px 8px', fontSize: 13, cursor: 'pointer', borderRadius: isExpanded ? '4px 4px 0 0' : 4,
+                background: isExpanded ? 'var(--surface2)' : 'transparent',
+                borderBottom: isExpanded ? 'none' : '1px solid var(--border2)',
+                alignItems: 'center', opacity: isGrayed ? 0.5 : 1,
+              }}
+            >
+              <span style={{ fontWeight: 700, color: 'var(--text)' }}>{c.symbol}</span>
+              <span style={{ fontWeight: 700, color: scoreColor(c.score ?? 0) }}>{c.score ?? '—'}</span>
+              <span style={{ fontSize: 12, color: channelColor }}>
+                {channelPct != null ? `▼${channelPct}% low` : '—'}
+              </span>
+              <span style={{ fontSize: 12, color: rsiColor }}>
+                {c.rsi_slope != null ? ((c.rsi_slope > 0 ? '+' : '') + c.rsi_slope.toFixed(2)) : '—'}
+              </span>
+              <span style={{ fontSize: 13 }}>
+                <span style={{ color: QUALITY_COLOR[c.data_quality] }}>{QUALITY_DOT[c.data_quality] ?? '○'}</span>
+                <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 5 }}>
+                  {c.data_quality === 'complete' ? 'complete' : c.data_quality === 'partial' ? 'partial' : 'price only'}
+                </span>
+              </span>
+              <span style={{ fontSize: 11, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {c.setup_brief ? (c.setup_brief.length > 60 ? c.setup_brief.slice(0, 60) + '…' : c.setup_brief) : '—'}
               </span>
             </div>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
-
-function AssistantPlaybookPanel() {
-  const [open, setOpen] = useState(false)
-  const [rules, setRules] = useState(null)
-  const [seeded, setSeeded] = useState(false)
-  const [seeding, setSeeding] = useState(false)
-  const [seedMsg, setSeedMsg] = useState(null)
-
-  async function load() {
-    if (rules) { setOpen(o => !o); return }
-    try {
-      const data = await api.bull.assistantPlaybook()
-      setRules(data.rules)
-      setOpen(true)
-    } catch {
-      setRules([])
-      setOpen(true)
-    }
-  }
-
-  async function handleSeed() {
-    setSeeding(true)
-    try {
-      const resp = await api.bull.seedPlaybook()
-      setSeeded(true)
-      setSeedMsg(resp.already_seeded ? 'already' : 'saved')
-    } catch {
-      setSeedMsg('error')
-    } finally {
-      setSeeding(false)
-    }
-  }
-
-  return (
-    <div style={{ marginBottom: 20 }}>
-      <button
-        onClick={load}
-        style={{ background: 'none', border: 'none', color: 'var(--muted)', fontSize: 12, cursor: 'pointer', padding: 0, textDecoration: 'underline' }}
-      >
-        {open ? '▲ Hide' : '▼ View'} Bull AI Playbook
-      </button>
-      {open && rules && (
-        <div style={{ background: 'var(--surface2)', borderRadius: 6, padding: '10px 14px', marginTop: 8, fontSize: 12, color: 'var(--text2)', lineHeight: 1.7 }}>
-          <p style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 8px', fontWeight: 700, letterSpacing: '0.05em' }}>
-            BULL ASSISTANT PLAYBOOK — 6 rules for bull put spreads
-          </p>
-          <ol style={{ margin: 0, paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 4 }}>
-            {rules.map((r, i) => <li key={i}>{r}</li>)}
-          </ol>
-          <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-            {seedMsg === 'saved' ? (
-              <span style={{ fontSize: 11, color: 'var(--green)' }}>
-                ✓ Saved as Bull Put Spread —{' '}
-                <a href="/playbook" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>View in Playbook</a>
-              </span>
-            ) : seedMsg === 'already' ? (
-              <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-                ✓ Already in Playbook —{' '}
-                <a href="/playbook" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>View in Playbook</a>
-              </span>
-            ) : seedMsg === 'error' ? (
-              <span style={{ fontSize: 11, color: 'var(--red)' }}>Could not save — try again.</span>
-            ) : (
-              <button
-                onClick={handleSeed}
-                disabled={seeding || seeded}
-                style={{ background: 'var(--surface)', border: '1px solid var(--border2)', borderRadius: 5, color: 'var(--accent)', fontSize: 11, padding: '4px 10px', cursor: seeding ? 'not-allowed' : 'pointer', opacity: seeding ? 0.6 : 1 }}
-              >
-                {seeding ? 'Saving…' : 'Save to My Playbook →'}
-              </button>
+            {isExpanded && (
+              <ExpandedRow c={c} logged={logged} onLog={handleLog} onDismiss={() => setExpanded(null)} />
             )}
           </div>
-        </div>
-      )}
+        )
+      })}
     </div>
   )
 }

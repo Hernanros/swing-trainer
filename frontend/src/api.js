@@ -113,6 +113,9 @@ export const api = {
     chat:               (body) => request('POST', '/bull/chat', body),
     assistantPlaybook:  ()     => request('GET',  '/bull/assistant-playbook'),
     seedPlaybook:       ()     => request('POST', '/bull/seed-playbook', {}),
+    kpis:               ()     => request('GET',  '/bull/kpis'),
+    paperTrades:        (page = 1, perPage = 20) => request('GET', `/bull/paper-trades?page=${page}&per_page=${perPage}`),
+    logPaperTrade:      (body) => request('POST', '/bull/paper-trades/manual', body),
   },
   paperAccount: {
     get:        ()     => request('GET', '/paper-account'),
