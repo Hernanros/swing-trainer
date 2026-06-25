@@ -70,9 +70,21 @@ def call_claude(prompt: str, max_tokens: int = 1000) -> str:
     return message.content[0].text
 
 
-def _build_debrief_prompt(trade, rule_detail: Optional[dict] = None, coaching_context: str = "", playbook_rules: list = None) -> str:
+def _build_debrief_prompt(
+    trade,
+    rule_detail: Optional[dict] = None,
+    coaching_context: str = "",
+    playbook_rules: list = None,
+    setup_context: Optional[dict] = None,
+) -> str:
     pnl_str = f"${trade.pnl:.2f}" if trade.pnl is not None else "N/A"
     r_str   = f"{trade.r_multiple:.2f}R" if trade.r_multiple is not None else "?R"
+
+    # If we have BOTH playbook rules AND objective technical context, Claude can actually
+    # judge each rule against real numbers instead of trusting (or speculating about) the
+    # trader's checklist. That's the most useful debrief mode and takes priority over
+    # self-report framing.
+    can_evaluate_rules = bool(playbook_rules) and bool(setup_context)
 
     # Build compliance block from checklist self-assessment.
     # The trader's self-report is authoritative — do not override it with independent inference.
@@ -148,7 +160,19 @@ def _build_debrief_prompt(trade, rule_detail: Optional[dict] = None, coaching_co
         )
         if getattr(trade, 'pre_trade_advisory', None):
             trade_block += f"\n- Pre-trade advisory: {trade.pre_trade_advisory}"
-        if has_adherence_signal:
+        if can_evaluate_rules:
+            paragraphs = (
+                "Write exactly 4 short paragraphs:\n"
+                "1. Setup validity — walk through each [MUST] and [SHOULD] playbook rule and judge whether the "
+                "Technical context shows it was met at entry. Cite the specific number from the context for each "
+                "rule (e.g., 'Above 50 MA: YES, close $X vs SMA50 $Y'). Be concrete; no hedging.\n"
+                "2. Spread structure — were the strikes, expiry, and premium appropriate for the thesis?\n"
+                "3. Risk management — was position size appropriate relative to max risk, and was the trade managed well?\n"
+                "4. Key lesson — one specific, actionable observation from this trade."
+            )
+            if getattr(trade, 'pre_trade_advisory', None):
+                paragraphs += "\n\nIn paragraph 1, briefly compare whether the outcome matched the pre-trade advisory."
+        elif has_adherence_signal:
             paragraphs = (
                 "Write exactly 4 short paragraphs:\n"
                 "1. Plan adherence — acknowledge what the trader got right based on their self-reported checklist; "
@@ -178,7 +202,17 @@ def _build_debrief_prompt(trade, rule_detail: Optional[dict] = None, coaching_co
             f"- Pre-trade note: {trade.pre_note or 'None'}\n"
             f"{compliance_block}"
         )
-        if has_adherence_signal:
+        if can_evaluate_rules:
+            paragraphs = (
+                "Write exactly 4 short paragraphs:\n"
+                "1. Setup validity — walk through each [MUST] and [SHOULD] playbook rule and judge whether the "
+                "Technical context shows it was met at entry. Cite the specific number from the context for each "
+                "rule (e.g., 'Above 50 MA: YES, close $X vs SMA50 $Y'). Be concrete; no hedging.\n"
+                "2. Entry quality — was entry precise and well-timed given that context?\n"
+                "3. Risk management — was the stop structural, sized correctly, and honoured?\n"
+                "4. Key lesson — one specific, actionable observation from this trade."
+            )
+        elif has_adherence_signal:
             paragraphs = (
                 "Write exactly 4 short paragraphs:\n"
                 "1. Plan adherence — acknowledge what the trader got right based on their self-reported checklist; "
@@ -199,13 +233,32 @@ def _build_debrief_prompt(trade, rule_detail: Optional[dict] = None, coaching_co
     context_block = f"\nStudent context:\n{coaching_context}\n" if coaching_context else ""
     if playbook_rules:
         rules_text = "\n".join(f"- [{r.tier.upper()}] {r.text}" for r in playbook_rules)
-        rules_block = f"\nPlaybook rules for this setup ({trade.setup_type}) — for reference only, do NOT re-evaluate compliance independently:\n{rules_text}\n"
+        if can_evaluate_rules:
+            rules_block = (
+                f"\nPlaybook rules for this setup ({trade.setup_type}):\n{rules_text}\n"
+                "Use the Technical context block below to evaluate each [MUST] and [SHOULD] "
+                "rule against the actual numbers at entry. State met/not-met with the specific "
+                "data point that proves it. Do not invent rules the trader didn't write.\n"
+            )
+        else:
+            rules_block = (
+                f"\nPlaybook rules for this setup ({trade.setup_type}) — for reference only, "
+                f"do NOT re-evaluate compliance independently:\n{rules_text}\n"
+            )
     else:
         rules_block = ""
+
+    if setup_context:
+        from backend.services.setup_analyzer import format_setup_context
+        setup_block = f"\n{format_setup_context(setup_context)}\n"
+    else:
+        setup_block = ""
+
     prompt = (
         f"You are a supportive but honest swing trading coach. Write a concise debrief that helps the trader improve."
         f"{context_block}"
-        f"{rules_block}\n"
+        f"{rules_block}"
+        f"{setup_block}\n"
         f"Trade:\n{trade_block}\n\n"
         f"{paragraphs}\n\n"
         f"Be specific and constructive. The checklist self-assessment is the authoritative record of plan adherence — "
@@ -214,13 +267,25 @@ def _build_debrief_prompt(trade, rule_detail: Optional[dict] = None, coaching_co
     return prompt
 
 
-def generate_trade_debrief(trade, rule_detail: Optional[dict] = None, coaching_context: str = "", playbook_rules: list = None) -> str:
+def generate_trade_debrief(
+    trade,
+    rule_detail: Optional[dict] = None,
+    coaching_context: str = "",
+    playbook_rules: list = None,
+    setup_context: Optional[dict] = None,
+) -> str:
     if not _api_key:
         return "[AI debrief unavailable — set ANTHROPIC_API_KEY to enable]"
     from anthropic import Anthropic
     client = Anthropic(api_key=_api_key)
 
-    prompt = _build_debrief_prompt(trade, rule_detail, coaching_context, playbook_rules)
+    prompt = _build_debrief_prompt(
+        trade,
+        rule_detail=rule_detail,
+        coaching_context=coaching_context,
+        playbook_rules=playbook_rules,
+        setup_context=setup_context,
+    )
 
     message = client.messages.create(
         model="claude-sonnet-4-6",

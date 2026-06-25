@@ -9,6 +9,7 @@ from backend.auth import get_current_user
 from backend.models import Trade, User, ChecklistLog, PlaybookRule
 from backend.schemas import TradeCreate, TradeClose, TradeUpdate, TradeResponse
 from backend.services import claude as claude_service
+from backend.services.setup_analyzer import compute_setup_context
 
 router = APIRouter(prefix="/trades", tags=["trades"])
 logger = logging.getLogger(__name__)
@@ -64,7 +65,14 @@ def _generate_debrief_bg(trade_id: int, rule_detail: Optional[dict] = None) -> N
             )
             .all()
         ) if trade.setup_type else []
-        trade.ai_debrief = claude_service.generate_trade_debrief(trade, rule_detail, coaching_context, playbook_rules)
+        setup_context = compute_setup_context(trade.symbol, trade.trade_date) if trade.trade_date else None
+        trade.ai_debrief = claude_service.generate_trade_debrief(
+            trade,
+            rule_detail=rule_detail,
+            coaching_context=coaching_context,
+            playbook_rules=playbook_rules,
+            setup_context=setup_context,
+        )
         db.commit()
     except Exception:
         db.rollback()
@@ -354,9 +362,13 @@ def regenerate_debriefs(
                 .all()
             )
         playbook_rules = rules_by_setup.get(setup, []) if setup else []
+        setup_context = compute_setup_context(trade.symbol, trade.trade_date) if trade.trade_date else None
         try:
             trade.ai_debrief = claude_service.generate_trade_debrief(
-                trade, coaching_context=coaching_context, playbook_rules=playbook_rules,
+                trade,
+                coaching_context=coaching_context,
+                playbook_rules=playbook_rules,
+                setup_context=setup_context,
             )
             regenerated += 1
         except Exception:
@@ -389,7 +401,13 @@ def generate_ai_debrief(
         )
         .all()
     ) if trade.setup_type else []
-    trade.ai_debrief = claude_service.generate_trade_debrief(trade, coaching_context=coaching_context, playbook_rules=playbook_rules)
+    setup_context = compute_setup_context(trade.symbol, trade.trade_date) if trade.trade_date else None
+    trade.ai_debrief = claude_service.generate_trade_debrief(
+        trade,
+        coaching_context=coaching_context,
+        playbook_rules=playbook_rules,
+        setup_context=setup_context,
+    )
     db.commit()
     db.refresh(trade)
     return _to_response(trade)
