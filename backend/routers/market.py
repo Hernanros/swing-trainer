@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -10,6 +10,12 @@ from backend.services.market import get_quote, get_candles, get_next_earnings
 
 router = APIRouter(prefix="/market", tags=["market"])
 _log = logging.getLogger(__name__)
+
+# Trailing edge of the candle window is `trade_date + 10` (see services/market._fetch_candles).
+# Cache that window briefly so today's close updates; cache fully historical windows long.
+_CANDLE_TRAILING_EDGE_DAYS = 10
+_CANDLE_TTL_RECENT = 60 * 60        # 1h while the window still reaches into the present
+_CANDLE_TTL_HISTORICAL = 30 * 86400  # 30d once the window is fully in the past
 
 
 @router.get("/quote/{symbol}")
@@ -33,9 +39,18 @@ def candles(
     symbol = symbol.upper()
     if date:
         cache_key = f"candles:{symbol}:{date}:{days}"
+        now = datetime.now(timezone.utc)
+        try:
+            trade_dt = datetime.strptime(date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            raise HTTPException(400, "date must be YYYY-MM-DD")
+        trailing_edge = trade_dt + timedelta(days=_CANDLE_TRAILING_EDGE_DAYS)
+        ttl = _CANDLE_TTL_RECENT if trailing_edge >= now else _CANDLE_TTL_HISTORICAL
         row = db.query(CachedContent).filter(CachedContent.key == cache_key).first()
         if row:
-            return json.loads(row.content)
+            age = (now - row.generated_at.replace(tzinfo=timezone.utc)).total_seconds()
+            if 0 <= age < ttl:
+                return json.loads(row.content)
         try:
             result = get_candles(symbol, days, date=date)
         except ValueError as e:
@@ -43,7 +58,12 @@ def candles(
         except Exception as e:
             _log.exception("Historical candles fetch failed for %s date=%s", symbol, date)
             raise HTTPException(503, f"Candle data unavailable for {symbol}: {e}")
-        db.add(CachedContent(key=cache_key, content=json.dumps(result)))
+        content = json.dumps(result)
+        if row:
+            row.content = content
+            row.generated_at = now
+        else:
+            db.add(CachedContent(key=cache_key, content=content, generated_at=now))
         db.commit()
         return result
 

@@ -221,6 +221,9 @@ export default function Journal() {
                           stop={t.stop_price}
                           target={t.target_price}
                           exit={t.exit_price}
+                          tradeType={t.trade_type}
+                          longStrike={t.option_long_strike}
+                          shortStrike={t.option_short_strike}
                         />
                         {t.ai_debrief && (
                           <div style={{ color: 'var(--text2)', fontSize: 13, marginTop: 8 }}>

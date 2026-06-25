@@ -245,16 +245,21 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
           option_short_strike: +form.option_short_strike,
         }),
       }
+      const closeItems = rules
+        .filter(r => r.tier !== 'context')
+        .map(r => ({ rule_id: r.id, checked: !!checked[r.id], tier: r.tier }))
+      const closeAnyChecked = closeItems.some(i => i.checked)
       const data = mode === 'open'
         ? { ...openPayload, checklist_score: computeChecklistScore(), pre_trade_advisory: advisoryText || null }
         : mode === 'edit'
         ? openPayload
         : {
-            exit_price:      +form.exit_price,
-            debrief:         form.debrief.trim(),
-            checklist_items: rules
-              .filter(r => r.tier !== 'context')
-              .map(r => ({ rule_id: r.id, checked: !!checked[r.id], tier: r.tier })),
+            exit_price: +form.exit_price,
+            debrief:    form.debrief.trim(),
+            // Only grade plan adherence if the trader explicitly marked rules they followed.
+            // Otherwise the backend treats this as "checklist skipped" — silently sending
+            // every box unchecked would produce false 0/100 "rules violated" feedback.
+            ...(closeAnyChecked ? { checklist_items: closeItems } : {}),
           }
       await onSubmit(data)
       onClose()
@@ -680,6 +685,45 @@ export default function TradeDrawer({ mode, trade, onSubmit, onClose, prefill })
               />
               {errors.debrief && <span style={{ color: 'var(--red)', fontSize: 11 }}>{errors.debrief}</span>}
             </div>
+
+            {rules.length > 0 && (
+              <div style={{ background: 'var(--surface2)', borderRadius: 8, padding: '10px 12px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 2 }}>
+                  Plan Adherence <span style={{ color: 'var(--dim)' }}>— check rules you actually followed; leave all blank to skip grading</span>
+                </div>
+                {['must', 'should', 'context'].map(tier => {
+                  const tierRules = rules.filter(r => r.tier === tier)
+                  if (tierRules.length === 0) return null
+                  return (
+                    <div key={tier}>
+                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: TIER_COLORS[tier], marginBottom: 4, letterSpacing: '0.06em' }}>
+                        {TIER_LABELS[tier]}
+                      </div>
+                      {tierRules.map(rule => (
+                        <label key={rule.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', marginBottom: 4 }}>
+                          {tier !== 'context' ? (
+                            <input
+                              type="checkbox"
+                              checked={!!checked[rule.id]}
+                              onChange={() => toggleRule(rule.id)}
+                              style={{ marginTop: 2, flexShrink: 0 }}
+                            />
+                          ) : (
+                            <span style={{ width: 14, height: 14, flexShrink: 0 }} />
+                          )}
+                          <span style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.4 }}>{rule.text}</span>
+                        </label>
+                      ))}
+                    </div>
+                  )
+                })}
+                {checklistScore !== null && (
+                  <div style={{ fontSize: 11, color: 'var(--muted)', borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 4 }}>
+                    Score: <strong style={{ color: 'var(--text)' }}>{checklistScore}%</strong>
+                  </div>
+                )}
+              </div>
+            )}
           </>}
 
           {errors._form && <div style={{ color: 'var(--red)', fontSize: 12 }}>{errors._form}</div>}

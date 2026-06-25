@@ -242,7 +242,11 @@ def close_trade(
     trade.status = "closed"
 
     rule_detail = None
-    if body.checklist_items:
+    # Treat an all-unchecked submission as "checklist skipped" rather than "all rules violated".
+    # The close UI also omits the field in that case, but guard server-side too so a stale client
+    # can't produce false 0/100 "rules violated" debriefs.
+    has_any_checked = bool(body.checklist_items) and any(i["checked"] for i in body.checklist_items)
+    if body.checklist_items and has_any_checked:
         rule_ids = [item["rule_id"] for item in body.checklist_items]
         rule_map = {
             r.id: r.text

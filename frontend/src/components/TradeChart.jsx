@@ -1,7 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createChart, CandlestickSeries } from 'lightweight-charts'
 
-export default function TradeChart({ symbol, date, entry, stop, target, exit }) {
+export default function TradeChart({
+  symbol, date, entry, stop, target, exit,
+  tradeType = 'equity',
+  longStrike, shortStrike,
+}) {
   const containerRef = useRef(null)
   const [loading, setLoading] = useState(true)
   const [error, setError]     = useState(null)
@@ -53,29 +57,50 @@ export default function TradeChart({ symbol, date, entry, stop, target, exit }) 
     })
     series.setData(candles)
 
-    const priceLines = [
-      { price: entry, color: '#58a6ff', title: 'Entry' },
-      { price: stop,  color: '#f85149', title: 'Stop'  },
-      { price: target,color: '#3fb950', title: 'Target'},
-    ]
-    if (exit != null) {
-      priceLines.push({ price: exit, color: '#e3b341', title: 'Exit' })
+    // Option spreads: entry/stop/target/exit are option PREMIUMS (e.g. $1.50), not underlying
+    // prices, so they don't belong on the underlying's candle chart. Draw the strikes (which ARE
+    // in the underlying's price domain) and place Entry/Exit markers on the candle timeline.
+    const priceLines = []
+    if (tradeType === 'option_spread') {
+      if (longStrike  != null) priceLines.push({ price: longStrike,  color: '#58a6ff', title: 'Long'  })
+      if (shortStrike != null) priceLines.push({ price: shortStrike, color: '#e3b341', title: 'Short' })
+    } else {
+      priceLines.push({ price: entry,  color: '#58a6ff', title: 'Entry'  })
+      priceLines.push({ price: stop,   color: '#f85149', title: 'Stop'   })
+      priceLines.push({ price: target, color: '#3fb950', title: 'Target' })
+      if (exit != null) priceLines.push({ price: exit, color: '#e3b341', title: 'Exit' })
     }
     priceLines.forEach(({ price, color, title }) => {
+      if (price == null || !Number.isFinite(+price)) return
       series.createPriceLine({
-        price,
+        price: +price,
         color,
-        lineWidth: 1,
-        lineStyle: 2,   // dashed
+        lineWidth: 2,
+        lineStyle: 0,           // solid — 1px dashed was nearly invisible
         axisLabelVisible: true,
         title,
       })
     })
 
+    // For option spreads, also drop Entry/Exit markers on the candle timeline so the user can
+    // see WHEN the trade happened relative to price action. Entry anchors to `date`; Exit anchors
+    // to the latest candle in the series (we don't currently persist a close timestamp).
+    if (tradeType === 'option_spread' && candles.length > 0) {
+      const tradeTs = Math.floor(new Date(date).getTime() / 1000)
+      const entryCandle = candles.find(c => c.time >= tradeTs) || candles[0]
+      const markers = [
+        { time: entryCandle.time, position: 'belowBar', color: '#58a6ff', shape: 'arrowUp', text: 'Entry' },
+      ]
+      if (exit != null) {
+        markers.push({ time: candles[candles.length - 1].time, position: 'aboveBar', color: '#e3b341', shape: 'arrowDown', text: 'Exit' })
+      }
+      series.setMarkers(markers)
+    }
+
     chart.timeScale().fitContent()
 
     return () => { chart.remove() }
-  }, [candles, entry, stop, target, exit])
+  }, [candles, entry, stop, target, exit, tradeType, longStrike, shortStrike, date])
 
   if (loading) {
     return (
