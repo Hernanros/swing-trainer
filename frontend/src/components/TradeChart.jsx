@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { createChart, CandlestickSeries } from 'lightweight-charts'
+import { createChart, CandlestickSeries, createSeriesMarkers } from 'lightweight-charts'
 
 export default function TradeChart({
   symbol, date, entry, stop, target, exit,
@@ -94,7 +94,8 @@ export default function TradeChart({
       if (exit != null) {
         markers.push({ time: candles[candles.length - 1].time, position: 'aboveBar', color: '#e3b341', shape: 'arrowDown', text: 'Exit' })
       }
-      series.setMarkers(markers)
+      // lightweight-charts v5: markers moved off the series; use the standalone plugin factory.
+      createSeriesMarkers(series, markers)
     }
 
     chart.timeScale().fitContent()
