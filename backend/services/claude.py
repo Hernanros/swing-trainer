@@ -76,7 +76,12 @@ def _build_debrief_prompt(trade, rule_detail: Optional[dict] = None, coaching_co
 
     # Build compliance block from checklist self-assessment.
     # The trader's self-report is authoritative — do not override it with independent inference.
+    # `has_adherence_signal` controls whether paragraph 1 covers plan adherence or the trade thesis:
+    # with no checklist data at all, paragraph 1 about "adherence" forces the model into a
+    # condescending "process credit isn't real" lecture, which the trader has explicitly rejected.
+    has_adherence_signal = False
     if rule_detail:
+        has_adherence_signal = True
         followed = rule_detail.get("followed") or []
         violated = rule_detail.get("violated") or []
         if followed and not violated:
@@ -100,10 +105,20 @@ def _build_debrief_prompt(trade, rule_detail: Optional[dict] = None, coaching_co
                 f"- Plan adherence score: N/A (checklist submitted but no items recorded)\n"
                 f"Do not assess rule compliance — focus on trade structure and outcome."
             )
+    elif trade.checklist_score is not None:
+        has_adherence_signal = True
+        compliance_block = (
+            f"- Plan adherence score (graded at entry): {trade.checklist_score:.0f}%\n"
+            "Treat this entry-time score as authoritative. The trader did not re-grade at close. "
+            "Do NOT speculate about which specific rules were or weren't followed. "
+            "Do NOT lecture about missing close-time checklist."
+        )
     else:
         compliance_block = (
-            "- No checklist submitted.\n"
-            "Do not assess or infer rule compliance from the trade data — focus on trade structure and outcome only."
+            "- No checklist information is available for this trade.\n"
+            "STRICT RULE: Do NOT mention the checklist, plan adherence, process credit, "
+            "rule compliance, habit-building, or any related framing anywhere in your output. "
+            "Treat the trade purely on its structural and outcome merits."
         )
 
     if (trade.trade_type or "equity") == "option_spread":
@@ -133,16 +148,27 @@ def _build_debrief_prompt(trade, rule_detail: Optional[dict] = None, coaching_co
         )
         if getattr(trade, 'pre_trade_advisory', None):
             trade_block += f"\n- Pre-trade advisory: {trade.pre_trade_advisory}"
-        paragraphs = (
-            "Write exactly 4 short paragraphs:\n"
-            "1. Plan adherence — acknowledge what the trader got right based on their self-reported checklist; "
-            "if rules were violated, state the consequence once without lecturing.\n"
-            "2. Spread structure — were the strikes, expiry, and premium appropriate for the thesis?\n"
-            "3. Risk management — was position size appropriate relative to max risk, and was the trade managed well?\n"
-            "4. Key lesson — one specific, actionable observation from this trade."
-        )
-        if getattr(trade, 'pre_trade_advisory', None):
-            paragraphs += "\n\nIn paragraph 1, briefly compare whether the outcome matched the pre-trade advisory."
+        if has_adherence_signal:
+            paragraphs = (
+                "Write exactly 4 short paragraphs:\n"
+                "1. Plan adherence — acknowledge what the trader got right based on their self-reported checklist; "
+                "if rules were violated, state the consequence once without lecturing.\n"
+                "2. Spread structure — were the strikes, expiry, and premium appropriate for the thesis?\n"
+                "3. Risk management — was position size appropriate relative to max risk, and was the trade managed well?\n"
+                "4. Key lesson — one specific, actionable observation from this trade."
+            )
+            if getattr(trade, 'pre_trade_advisory', None):
+                paragraphs += "\n\nIn paragraph 1, briefly compare whether the outcome matched the pre-trade advisory."
+        else:
+            paragraphs = (
+                "Write exactly 4 short paragraphs:\n"
+                "1. Trade thesis — what was the bullish/bearish case implied by the spread, and did price action validate it?\n"
+                "2. Spread structure — were the strikes, expiry, and premium appropriate for that thesis?\n"
+                "3. Risk management — was position size appropriate relative to max risk, and was the trade managed well?\n"
+                "4. Key lesson — one specific, actionable observation from this trade."
+            )
+            if getattr(trade, 'pre_trade_advisory', None):
+                paragraphs += "\n\nIn paragraph 1, briefly compare whether the outcome matched the pre-trade advisory."
     else:
         trade_block = (
             f"- Symbol: {trade.symbol} | Direction: {trade.direction}\n"
@@ -152,14 +178,23 @@ def _build_debrief_prompt(trade, rule_detail: Optional[dict] = None, coaching_co
             f"- Pre-trade note: {trade.pre_note or 'None'}\n"
             f"{compliance_block}"
         )
-        paragraphs = (
-            "Write exactly 4 short paragraphs:\n"
-            "1. Plan adherence — acknowledge what the trader got right based on their self-reported checklist; "
-            "if rules were violated, state the consequence once without lecturing.\n"
-            "2. Entry quality — was entry precise and well-timed?\n"
-            "3. Risk management — was the stop structural, sized correctly, and honoured?\n"
-            "4. Key lesson — one specific, actionable observation from this trade."
-        )
+        if has_adherence_signal:
+            paragraphs = (
+                "Write exactly 4 short paragraphs:\n"
+                "1. Plan adherence — acknowledge what the trader got right based on their self-reported checklist; "
+                "if rules were violated, state the consequence once without lecturing.\n"
+                "2. Entry quality — was entry precise and well-timed?\n"
+                "3. Risk management — was the stop structural, sized correctly, and honoured?\n"
+                "4. Key lesson — one specific, actionable observation from this trade."
+            )
+        else:
+            paragraphs = (
+                "Write exactly 4 short paragraphs:\n"
+                "1. Trade thesis — what was the directional case at entry, and did price action validate it?\n"
+                "2. Entry quality — was entry precise and well-timed?\n"
+                "3. Risk management — was the stop structural, sized correctly, and honoured?\n"
+                "4. Key lesson — one specific, actionable observation from this trade."
+            )
 
     context_block = f"\nStudent context:\n{coaching_context}\n" if coaching_context else ""
     if playbook_rules:
