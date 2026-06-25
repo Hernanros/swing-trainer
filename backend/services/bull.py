@@ -195,12 +195,23 @@ def _channel_context_60d(closes: list, highs: list, lows: list) -> dict:
     return {"slope": channel_slope, "proximity_pct": proximity_pct, "passes_gate": passes_gate}
 
 
+_RSI_SLOPE_LOOKBACK = 5
+
+
 def _rsi_slope(closes: list) -> float:
     """
-    Returns the slope of RSI(14) over the last 3 bars (change per bar).
-    Positive means RSI is turning upward. Returns 0.0 if fewer than 22 bars.
+    Slope of RSI(14) over the last 5 bars, fit by linear regression.
+    Positive means RSI is trending upward. Units are RSI points per bar.
+
+    The previous 2-point method (today vs 2 bars ago) was noisy — one
+    strong day would make the slope look great even if the underlying
+    RSI trend was flat. Fitting a line across 5 bars smooths that.
+
+    Returns 0.0 when there are fewer than 14 + LOOKBACK bars (RSI needs
+    15 closes for its first reading, then LOOKBACK-1 more to fit the line).
     """
-    if len(closes) < 22:
+    import numpy as np
+    if len(closes) < 14 + _RSI_SLOPE_LOOKBACK:
         return 0.0
 
     def _rsi14(series: list) -> float:
@@ -213,9 +224,14 @@ def _rsi_slope(closes: list) -> float:
             return 100.0
         return 100.0 - 100.0 / (1 + avg_gain / avg_loss)
 
-    rsi_t0 = _rsi14(closes[:-2])   # 2 bars ago
-    rsi_t2 = _rsi14(closes)         # today
-    return (rsi_t2 - rsi_t0) / 2    # slope: change per bar
+    n = len(closes)
+    rsi_values = [
+        _rsi14(closes[: n - (_RSI_SLOPE_LOOKBACK - 1 - i)])
+        for i in range(_RSI_SLOPE_LOOKBACK)
+    ]
+    x = np.arange(_RSI_SLOPE_LOOKBACK)
+    slope, _ = np.polyfit(x, rsi_values, 1)
+    return float(slope)
 
 
 def deterministic_score(candidate: dict, macro: dict) -> dict:

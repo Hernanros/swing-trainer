@@ -178,6 +178,24 @@ def test_rsi_slope_returns_zero_when_insufficient_data():
     assert slope == 0.0
 
 
+def test_rsi_slope_robust_to_single_day_spike():
+    """A flat trend with one moderate up day at the end should produce a
+    modest 5-bar regression slope — not the inflated reading that the
+    old 2-point method (today vs 2 bars ago) used to give. This is the
+    bug that motivated the rewrite."""
+    from backend.services.bull import _rsi_slope
+    # Zigzag ±0.1 keeps RSI around 50 (real gains AND losses), then one +1.0 day.
+    closes = [100.0]
+    for i in range(24):
+        closes.append(closes[-1] + (0.1 if i % 2 == 0 else -0.1))
+    closes.append(closes[-1] + 1.0)
+    slope = _rsi_slope(closes)
+    # The old 2-point method would have read about 10+ pts/day on this data and
+    # pegged the scoring component at full credit from one bar of action. The
+    # 5-bar regression averages the spike against 4 flat bars, capping it ~4.
+    assert 0 < slope < 5, f"expected modest positive slope from 1-bar spike, got {slope:.2f}"
+
+
 # ── Task 5: deterministic_score + new stage1_filter ────────────────────────────
 
 def test_deterministic_score_both_bullish_complete_full_score():
@@ -192,7 +210,7 @@ def test_deterministic_score_both_bullish_complete_full_score():
     }
     macro = {"spy": {"regime": "bullish"}, "qqq": {"regime": "bullish"}}  # 20 pts
     score = deterministic_score(candidate, macro)
-    assert score == 100
+    assert score["total"] == 100
 
 
 def test_deterministic_score_partial_data_quality_gets_zero_options_pts():
@@ -207,7 +225,7 @@ def test_deterministic_score_partial_data_quality_gets_zero_options_pts():
     }
     macro = {"spy": {"regime": "bullish"}, "qqq": {"regime": "bullish"}}
     score = deterministic_score(candidate, macro)
-    assert score == 80   # 25 + 20 + 15 + 20 + 0
+    assert score["total"] == 80   # 25 + 20 + 15 + 20 + 0
 
 
 def test_deterministic_score_one_bullish_gives_10_macro_pts():
@@ -220,7 +238,7 @@ def test_deterministic_score_one_bullish_gives_10_macro_pts():
     }
     macro = {"spy": {"regime": "bullish"}, "qqq": {"regime": "neutral"}}
     score = deterministic_score(candidate, macro)
-    assert score == 35   # 25 + 0 + 0 + 10 + 0
+    assert score["total"] == 35   # 25 + 0 + 0 + 10 + 0
 
 
 def test_stage1_filter_returns_candidates_sorted_by_proximity():
