@@ -41,6 +41,7 @@ export default function Journal() {
   const [drawer, setDrawer]   = useState(null) // null | { mode:'open' } | { mode:'close', trade } | { mode:'edit', trade }
   const [deletingId, setDeletingId] = useState(null)
   const [expandedId, setExpandedId] = useState(null)
+  const [regenerating, setRegenerating] = useState(false)
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -96,16 +97,40 @@ export default function Journal() {
     }
   }
 
+  async function handleRegenerateAll() {
+    if (!window.confirm('Regenerate the AI debrief for every closed trade? This overwrites the existing debriefs and uses the neutral "no checklist" prompt.')) return
+    setRegenerating(true)
+    try {
+      const result = await api.trades.regenerateAll()
+      await loadTrades()
+      window.alert(`Regenerated ${result.regenerated} of ${result.total_closed} closed trades.`)
+    } catch (e) {
+      window.alert(`Regenerate failed: ${e.message}`)
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
   return (
     <div className="page">
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ color: 'var(--text)', fontWeight: 700 }}>Trade Journal</h2>
-        <button
-          onClick={() => setDrawer({ mode: 'open' })}
-          style={{ background: '#238636', color: '#fff', border: 'none', borderRadius: 7, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
-        >
-          + New Trade
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={handleRegenerateAll}
+            disabled={regenerating}
+            style={{ background: 'transparent', color: 'var(--muted)', border: '1px solid var(--border2)', borderRadius: 7, padding: '7px 12px', fontSize: 12, fontWeight: 500, cursor: regenerating ? 'wait' : 'pointer', opacity: regenerating ? 0.5 : 1 }}
+            title="Regenerate AI debrief for every closed trade"
+          >
+            {regenerating ? 'Regenerating…' : '↻ Redo debriefs'}
+          </button>
+          <button
+            onClick={() => setDrawer({ mode: 'open' })}
+            style={{ background: '#238636', color: '#fff', border: 'none', borderRadius: 7, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
+          >
+            + New Trade
+          </button>
+        </div>
       </div>
 
       {loading && <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>}

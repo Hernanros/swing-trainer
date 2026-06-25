@@ -58,6 +58,7 @@ export const api = {
     update:  (id, body) => request('PATCH',  `/trades/${id}`, body),
     delete:  (id)       => request('DELETE', `/trades/${id}`),
     debrief: (id)       => request('POST',   `/trades/${id}/ai-debrief`),
+    regenerateAll: ()   => request('POST',   '/trades/regenerate-debriefs'),
     spreadAdvisory: (body) => request('POST', '/trades/spread-advisory', body),
   },
   playbook: {

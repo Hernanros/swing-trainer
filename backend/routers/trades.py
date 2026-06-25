@@ -323,6 +323,48 @@ def delete_trade(
     db.commit()
 
 
+@router.post("/regenerate-debriefs")
+def regenerate_debriefs(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Regenerate ai_debrief for every closed trade owned by the current user.
+
+    The new prompt falls through to the neutral "no checklist" branch, so old
+    debriefs polluted by the pre-fix false-positive checklist behavior get
+    replaced with structure/risk/lesson commentary only.
+    """
+    trades = db.query(Trade).filter(
+        Trade.user_id == current_user.id,
+        Trade.status == "closed",
+    ).all()
+    coaching_context = claude_service.get_user_coaching_context(current_user, db)
+    rules_by_setup: dict[str, list[PlaybookRule]] = {}
+    regenerated = 0
+    for trade in trades:
+        setup = trade.setup_type
+        if setup and setup not in rules_by_setup:
+            rules_by_setup[setup] = (
+                db.query(PlaybookRule)
+                .filter(
+                    PlaybookRule.user_id == current_user.id,
+                    PlaybookRule.setup_type == setup,
+                    PlaybookRule.active == True,
+                )
+                .all()
+            )
+        playbook_rules = rules_by_setup.get(setup, []) if setup else []
+        try:
+            trade.ai_debrief = claude_service.generate_trade_debrief(
+                trade, coaching_context=coaching_context, playbook_rules=playbook_rules,
+            )
+            regenerated += 1
+        except Exception:
+            logger.exception("Regenerate debrief failed for trade %s", trade.id)
+    db.commit()
+    return {"regenerated": regenerated, "total_closed": len(trades)}
+
+
 @router.post("/{trade_id}/ai-debrief", response_model=TradeResponse)
 def generate_ai_debrief(
     trade_id: int,
