@@ -236,11 +236,13 @@ def _rsi_slope(closes: list) -> float:
 
 def deterministic_score(candidate: dict, macro: dict) -> dict:
     """
-    Returns {total, channel_pts, rsi_pts, volume_pts, macro_pts, options_pts}.
+    Returns {total, channel_pts, rsi_pts, volume_pts, vol_rank_pts, macro_pts, options_pts, *_why}.
     Each component is capped at its individual max so no single dimension can
     inflate the total beyond its allocation.
     Channel proximity (25), RSI slope (20), Volume ratio (15),
-    Macro alignment (20), Options quality (20).
+    Macro alignment (20), Options quality (20), 52w volume rank bonus (10).
+    Total is clamped at 100, so the 10-pt vol_rank bonus rewards genuinely
+    exceptional volume days without inflating already-strong setups.
     """
     # Channel proximity: capped at 25. Negative proximity (below channel) = 0.
     prox = candidate.get("channel_proximity_pct")
@@ -272,6 +274,16 @@ def deterministic_score(candidate: dict, macro: dict) -> dict:
             options_pts = 20
         elif oi >= 200 and bid >= 0.30:
             options_pts = 12
+
+    # 52-week volume rank bonus (max 10).
+    # Stepped instead of linear so noise around 80th pct doesn't sneak credit.
+    vol_pct_rank = float(candidate.get("vol_52w_pct_rank") or 0.0)
+    if vol_pct_rank >= 95:
+        vol_rank_pts = 10
+    elif vol_pct_rank >= 80:
+        vol_rank_pts = 5
+    else:
+        vol_rank_pts = 0
 
     # Build justification strings
     if prox is None:
@@ -307,18 +319,54 @@ def deterministic_score(candidate: dict, macro: dict) -> dict:
         iv_pct = round((candidate.get("atm_iv") or 0) * 100, 0)
         options_why = f"ATM bid ${bid:.2f} · OI {oi:,} · IV {iv_pct:.0f}%"
 
-    total = min(100, channel_pts + rsi_pts + volume_pts + macro_pts + options_pts)
+    if vol_rank_pts >= 10:
+        vol_rank_why = f"Top 5% of 52-week volume ({vol_pct_rank:.0f}th pct) — institutional interest"
+    elif vol_rank_pts >= 5:
+        vol_rank_why = f"Top 20% of 52-week volume ({vol_pct_rank:.0f}th pct) — above-average attention"
+    else:
+        vol_rank_why = f"52-week volume rank {vol_pct_rank:.0f}th pct — unremarkable"
+
+    total = min(100, channel_pts + rsi_pts + volume_pts + macro_pts + options_pts + vol_rank_pts)
     return {
         "total": total,
-        "channel_pts": channel_pts, "channel_why": channel_why,
-        "rsi_pts": rsi_pts,         "rsi_why": rsi_why,
-        "volume_pts": volume_pts,   "volume_why": volume_why,
-        "macro_pts": macro_pts,     "macro_why": macro_why,
-        "options_pts": options_pts, "options_why": options_why,
+        "channel_pts": channel_pts,   "channel_why":   channel_why,
+        "rsi_pts": rsi_pts,           "rsi_why":       rsi_why,
+        "volume_pts": volume_pts,     "volume_why":    volume_why,
+        "vol_rank_pts": vol_rank_pts, "vol_rank_why":  vol_rank_why,
+        "macro_pts": macro_pts,       "macro_why":     macro_why,
+        "options_pts": options_pts,   "options_why":   options_why,
     }
 
 
 # ── Batch EOD Snapshot (yfinance) ────────────────────────────────────────────
+
+def _compute_volume_52w(volumes: list, dates: list) -> dict:
+    """Summarize the last ~252 trading days of volume.
+
+    Returns:
+      vol_52w_max: int             — largest single-day volume in the window
+      vol_52w_max_date: str|None   — ISO date of that bar
+      vol_52w_pct_rank: float      — today's volume percentile within the window (0-100)
+      vol_52w_ratio: float         — today's volume / 52w max (0-1)
+    """
+    window = volumes[-252:] if len(volumes) > 252 else volumes
+    window_dates = dates[-len(window):] if dates else []
+    if not window:
+        return {"vol_52w_max": 0, "vol_52w_max_date": None, "vol_52w_pct_rank": 0.0, "vol_52w_ratio": 0.0}
+    max_vol = max(window)
+    max_idx = window.index(max_vol)
+    max_date = window_dates[max_idx] if max_idx < len(window_dates) else None
+    today_vol = window[-1]
+    below_or_equal = sum(1 for v in window if v <= today_vol)
+    pct_rank = round(below_or_equal / len(window) * 100, 1)
+    ratio = round(today_vol / max_vol, 3) if max_vol > 0 else 0.0
+    return {
+        "vol_52w_max": int(max_vol),
+        "vol_52w_max_date": max_date,
+        "vol_52w_pct_rank": pct_rank,
+        "vol_52w_ratio": ratio,
+    }
+
 
 def _batch_eod_snapshots(symbols: list) -> dict:
     """
@@ -330,7 +378,7 @@ def _batch_eod_snapshots(symbols: list) -> dict:
         import yfinance as yf
         data = yf.download(
             tickers=symbols,
-            period="6mo",
+            period="1y",           # was 6mo — need ~252 trading days for 52w volume window
             interval="1d",
             group_by="ticker",
             auto_adjust=True,
@@ -349,6 +397,7 @@ def _batch_eod_snapshots(symbols: list) -> dict:
                 continue
             closes = df["Close"].tolist()
             volumes = df["Volume"].tolist()
+            dates = [str(d.date()) for d in df.index]
             if len(closes) < 21:
                 continue
             close = float(closes[-1])
@@ -364,6 +413,7 @@ def _batch_eod_snapshots(symbols: list) -> dict:
             rsi14 = 100.0 if avg_loss == 0 else round(100 - (100 / (1 + avg_gain / avg_loss)), 2)
             highs = df["High"].tolist()
             lows = df["Low"].tolist()
+            vol_52w = _compute_volume_52w(volumes, dates)
             snapshots[sym] = {
                 "symbol": sym,
                 "close": close,
@@ -374,6 +424,7 @@ def _batch_eod_snapshots(symbols: list) -> dict:
                 "closes": [float(c) for c in closes[-65:]],
                 "highs": [float(h) for h in highs[-65:]],
                 "lows": [float(l) for l in lows[-65:]],
+                **vol_52w,
             }
         except Exception:
             continue
@@ -630,11 +681,12 @@ def run_pipeline(options_provider, playbook_rules: list, bull_profile: dict) -> 
         breakdown = deterministic_score(c, macro)
         c["score"] = breakdown["total"]
         c["score_breakdown"] = {
-            "channel": breakdown["channel_pts"], "channel_why": breakdown["channel_why"],
-            "rsi":     breakdown["rsi_pts"],     "rsi_why":     breakdown["rsi_why"],
-            "volume":  breakdown["volume_pts"],  "volume_why":  breakdown["volume_why"],
-            "macro":   breakdown["macro_pts"],   "macro_why":   breakdown["macro_why"],
-            "options": breakdown["options_pts"], "options_why": breakdown["options_why"],
+            "channel":  breakdown["channel_pts"],  "channel_why":  breakdown["channel_why"],
+            "rsi":      breakdown["rsi_pts"],      "rsi_why":      breakdown["rsi_why"],
+            "volume":   breakdown["volume_pts"],   "volume_why":   breakdown["volume_why"],
+            "vol_rank": breakdown["vol_rank_pts"], "vol_rank_why": breakdown["vol_rank_why"],
+            "macro":    breakdown["macro_pts"],    "macro_why":    breakdown["macro_why"],
+            "options":  breakdown["options_pts"],  "options_why":  breakdown["options_why"],
         }
     candidates.sort(key=lambda x: x.get("score", 0), reverse=True)
 

@@ -4,11 +4,12 @@ import { api } from '../api'
 function ScoreTooltip({ breakdown }) {
   if (!breakdown) return null
   const rows = [
-    ['Channel', breakdown.channel, 25, breakdown.channel_why],
-    ['RSI Slope', breakdown.rsi, 20, breakdown.rsi_why],
-    ['Volume', breakdown.volume, 15, breakdown.volume_why],
-    ['Macro', breakdown.macro, 20, breakdown.macro_why],
-    ['Options', breakdown.options, 20, breakdown.options_why],
+    ['Channel',   breakdown.channel,  25, breakdown.channel_why],
+    ['RSI Slope', breakdown.rsi,      20, breakdown.rsi_why],
+    ['Volume',    breakdown.volume,   15, breakdown.volume_why],
+    ['52w Vol',   breakdown.vol_rank, 10, breakdown.vol_rank_why],
+    ['Macro',     breakdown.macro,    20, breakdown.macro_why],
+    ['Options',   breakdown.options,  20, breakdown.options_why],
   ]
   return (
     <div style={{
@@ -383,11 +384,12 @@ function ExpandedRow({ c, logged, onLog, onDismiss }) {
         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 10 }}>
           SCORE BREAKDOWN — {c.score}/100
         </div>
-        <MiniBar label="Channel Proximity" pts={bd.channel ?? 0} max={25} why={bd.channel_why} />
-        <MiniBar label="RSI Slope"         pts={bd.rsi ?? 0}     max={20} why={bd.rsi_why} />
-        <MiniBar label="Volume Ratio"      pts={bd.volume ?? 0}  max={15} why={bd.volume_why} />
-        <MiniBar label="Macro Alignment"   pts={bd.macro ?? 0}   max={20} why={bd.macro_why} />
-        <MiniBar label="Options Quality"   pts={bd.options ?? 0} max={20} why={bd.options_why} />
+        <MiniBar label="Channel Proximity" pts={bd.channel ?? 0}  max={25} why={bd.channel_why} />
+        <MiniBar label="RSI Slope"         pts={bd.rsi ?? 0}      max={20} why={bd.rsi_why} />
+        <MiniBar label="Volume Ratio"      pts={bd.volume ?? 0}   max={15} why={bd.volume_why} />
+        <MiniBar label="52w Vol Rank"      pts={bd.vol_rank ?? 0} max={10} why={bd.vol_rank_why} />
+        <MiniBar label="Macro Alignment"   pts={bd.macro ?? 0}    max={20} why={bd.macro_why} />
+        <MiniBar label="Options Quality"   pts={bd.options ?? 0}  max={20} why={bd.options_why} />
       </div>
 
       {c.setup_brief && (
@@ -501,7 +503,23 @@ function CandidatesTable({ candidates }) {
                 alignItems: 'center', opacity: isGrayed ? 0.5 : 1,
               }}
             >
-              <span style={{ fontWeight: 700, color: 'var(--text)' }}>{c.symbol}</span>
+              <span style={{ fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {c.symbol}
+                {c.vol_52w_pct_rank != null && c.vol_52w_pct_rank >= 80 && (
+                  <span
+                    title={`Today's volume is in the ${Math.round(c.vol_52w_pct_rank)}th percentile of the last 52 weeks. 52w peak: ${c.vol_52w_max_date || '—'}`}
+                    style={{
+                      fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
+                      padding: '1px 5px', borderRadius: 3,
+                      background: c.vol_52w_pct_rank >= 95 ? 'rgba(63,185,80,0.18)' : 'rgba(88,166,255,0.15)',
+                      color:      c.vol_52w_pct_rank >= 95 ? 'var(--green)'         : 'var(--accent)',
+                      border: `1px solid ${c.vol_52w_pct_rank >= 95 ? 'rgba(63,185,80,0.4)' : 'rgba(88,166,255,0.35)'}`,
+                    }}
+                  >
+                    VOL {Math.round(c.vol_52w_pct_rank)}%
+                  </span>
+                )}
+              </span>
               <span
                 style={{ position: 'relative', fontWeight: 700, color: scoreColor(c.score ?? 0), cursor: c.score_breakdown ? 'help' : 'default' }}
                 onMouseEnter={() => c.score_breakdown && setHoveredScore(i)}
