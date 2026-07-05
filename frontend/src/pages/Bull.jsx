@@ -1,18 +1,36 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api'
 
+const SETUP_LABELS = {
+  pullback_uptrend: 'Pullback in Uptrend',
+  base_breakout:    'Base / Breakout',
+  oversold_bounce:  'Oversold Bounce',
+  range_support:    'Range at Support',
+  none:             'No Setup',
+}
+const SETUP_SHORT = {
+  pullback_uptrend: 'PULLBACK',
+  base_breakout:    'BASE',
+  oversold_bounce:  'BOUNCE',
+  range_support:    'RANGE',
+}
+const SETUP_COLORS = {
+  pullback_uptrend: { fg: '#58a6ff', bg: 'rgba(88,166,255,0.15)',  bd: 'rgba(88,166,255,0.35)' },
+  base_breakout:    { fg: '#e3b341', bg: 'rgba(227,179,65,0.15)',  bd: 'rgba(227,179,65,0.35)' },
+  oversold_bounce:  { fg: '#a371f7', bg: 'rgba(163,113,247,0.15)', bd: 'rgba(163,113,247,0.35)' },
+  range_support:    { fg: '#3fb950', bg: 'rgba(63,185,80,0.15)',   bd: 'rgba(63,185,80,0.35)' },
+}
+
 function ScoreTooltip({ breakdown }) {
   if (!breakdown) return null
+  const setupLabel = SETUP_LABELS[breakdown.setup_type] || 'None'
   const rows = [
-    ['Channel',    breakdown.channel,  25, breakdown.channel_why],
-    ['RSI Slope',  breakdown.rsi,      20, breakdown.rsi_why],
-    ['Pullback',   breakdown.pullback, 10, breakdown.pullback_why],
+    [`Setup — ${setupLabel}`, breakdown.setup, 60, breakdown.setup_why],
+    ['Macro',      breakdown.macro,    10, breakdown.macro_why],
+    ['Volume',     breakdown.volume,   10, breakdown.volume_why],
+    ['52w Vol',    breakdown.vol_rank,  5, breakdown.vol_rank_why],
     ['Rel Str',    breakdown.rs,        5, breakdown.rs_why],
-    ['Pattern',    breakdown.pattern,   5, breakdown.pattern_why],
-    ['Volume',     breakdown.volume,   15, breakdown.volume_why],
-    ['52w Vol',    breakdown.vol_rank, 10, breakdown.vol_rank_why],
-    ['Macro',      breakdown.macro,    20, breakdown.macro_why],
-    ['Options',    breakdown.options,  20, breakdown.options_why],
+    ['Options',    breakdown.options,  10, breakdown.options_why],
   ]
   return (
     <div style={{
@@ -387,15 +405,12 @@ function ExpandedRow({ c, logged, onLog, onDismiss }) {
         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 10 }}>
           SCORE BREAKDOWN — {c.score}/100
         </div>
-        <MiniBar label="Channel Proximity"  pts={bd.channel ?? 0}  max={25} why={bd.channel_why} />
-        <MiniBar label="RSI Slope"          pts={bd.rsi ?? 0}      max={20} why={bd.rsi_why} />
-        <MiniBar label="Pullback Freshness" pts={bd.pullback ?? 0} max={10} why={bd.pullback_why} />
+        <MiniBar label={`Setup — ${SETUP_LABELS[bd.setup_type] || 'None'}`} pts={bd.setup ?? 0} max={60} why={bd.setup_why} />
+        <MiniBar label="Macro Alignment"    pts={bd.macro ?? 0}    max={10} why={bd.macro_why} />
+        <MiniBar label="Volume Ratio"       pts={bd.volume ?? 0}   max={10} why={bd.volume_why} />
+        <MiniBar label="52w Vol Rank"       pts={bd.vol_rank ?? 0} max={5}  why={bd.vol_rank_why} />
         <MiniBar label="Relative Strength"  pts={bd.rs ?? 0}       max={5}  why={bd.rs_why} />
-        <MiniBar label="Bullish Pattern"    pts={bd.pattern ?? 0}  max={5}  why={bd.pattern_why} />
-        <MiniBar label="Volume Ratio"       pts={bd.volume ?? 0}   max={15} why={bd.volume_why} />
-        <MiniBar label="52w Vol Rank"       pts={bd.vol_rank ?? 0} max={10} why={bd.vol_rank_why} />
-        <MiniBar label="Macro Alignment"    pts={bd.macro ?? 0}    max={20} why={bd.macro_why} />
-        <MiniBar label="Options Quality"    pts={bd.options ?? 0}  max={20} why={bd.options_why} />
+        <MiniBar label="Options Quality"    pts={bd.options ?? 0}  max={10} why={bd.options_why} />
       </div>
 
       {c.setup_brief && (
@@ -511,21 +526,32 @@ function CandidatesTable({ candidates }) {
             >
               <span style={{ fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 {c.symbol}
-                {c.bull_pattern && (
+                {c.setup_type && SETUP_COLORS[c.setup_type] && (
                   <span
-                    title={`Bullish reversal pattern detected on the last 2 bars: ${c.bull_pattern.replace(/_/g, ' ')}`}
+                    title={`${SETUP_LABELS[c.setup_type]}: ${c.setup_type === 'pullback_uptrend' ? 'rising channel + pullback to lower band' : c.setup_type === 'base_breakout' ? 'tight range with close near top' : c.setup_type === 'oversold_bounce' ? 'RSI reached <30 and turning up' : 'range-bound stock near range low'}. Setup score: ${c.setup_score}/60`}
                     style={{
                       fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
                       padding: '1px 5px', borderRadius: 3,
-                      background: 'rgba(63,185,80,0.18)',
-                      color: 'var(--green)',
-                      border: '1px solid rgba(63,185,80,0.4)',
+                      background: SETUP_COLORS[c.setup_type].bg,
+                      color:      SETUP_COLORS[c.setup_type].fg,
+                      border: `1px solid ${SETUP_COLORS[c.setup_type].bd}`,
                     }}
                   >
-                    {c.bull_pattern === 'hammer' ? '🔨 HAMMER'
-                      : c.bull_pattern === 'bullish_engulfing' ? '⬆ ENGULF'
-                      : c.bull_pattern === 'piercing_line' ? '⇑ PIERCE'
-                      : c.bull_pattern.toUpperCase()}
+                    {SETUP_SHORT[c.setup_type] || c.setup_type.toUpperCase()}
+                  </span>
+                )}
+                {c.bull_pattern && (
+                  <span
+                    title={`Bullish reversal pattern in last 2 bars: ${c.bull_pattern.replace(/_/g, ' ')}`}
+                    style={{
+                      fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
+                      padding: '1px 5px', borderRadius: 3,
+                      background: 'rgba(63,185,80,0.15)',
+                      color: 'var(--green)',
+                      border: '1px solid rgba(63,185,80,0.35)',
+                    }}
+                  >
+                    {c.bull_pattern === 'hammer' ? '🔨' : c.bull_pattern === 'bullish_engulfing' ? '⬆' : '⇑'}
                   </span>
                 )}
                 {c.vol_52w_pct_rank != null && c.vol_52w_pct_rank >= 80 && (

@@ -196,123 +196,106 @@ def test_rsi_slope_robust_to_single_day_spike():
     assert 0 < slope < 5, f"expected modest positive slope from 1-bar spike, got {slope:.2f}"
 
 
-# ── Task 5: deterministic_score + new stage1_filter ────────────────────────────
+# ── Task 5: multi-setup detector + deterministic_score ────────────────────────
 
-def test_deterministic_score_both_bullish_complete_full_score():
-    from backend.services.bull import deterministic_score
-    candidate = {
-        "channel_proximity_pct": 0.0,   # at lower band = 25 pts
-        "rsi_slope": 3.0,               # max slope = 20 pts
-        "volume_ratio": 1.5,            # >=1.2x = 15 pts
-        "data_quality": "complete",
-        "atm_oi": 600,                  # >=500 + bid>=0.50 = 20 pts
-        "atm_bid": 0.60,
+def _fake_snap(sym="AAPL", close=180.0, sma50=170.0, closes=None, highs=None, lows=None, opens_=None):
+    """Build a snapshot with the 60+ bars the new stage1 needs."""
+    n = 65
+    closes = closes if closes is not None else [close * (0.9 + 0.1 * (i / n)) for i in range(n)]
+    highs  = highs  if highs  is not None else [c * 1.02 for c in closes]
+    lows   = lows   if lows   is not None else [c * 0.98 for c in closes]
+    opens_ = opens_ if opens_ is not None else [c * 0.99 for c in closes]
+    return {
+        "symbol": sym, "close": closes[-1], "sma50": sma50, "rsi14": 55.0,
+        "volume": 2_000_000.0, "avg_volume_20d": 1_500_000,
+        "opens": opens_, "closes": closes, "highs": highs, "lows": lows,
     }
-    macro = {"spy": {"regime": "bullish"}, "qqq": {"regime": "bullish"}}  # 20 pts
-    score = deterministic_score(candidate, macro)
-    assert score["total"] == 100
 
 
-def test_deterministic_score_partial_data_quality_gets_zero_options_pts():
+def test_deterministic_score_setup_plus_context_caps_at_100():
     from backend.services.bull import deterministic_score
     candidate = {
-        "channel_proximity_pct": 0.0,
-        "rsi_slope": 3.0,
+        "setup_score": 60, "setup_type": "pullback_uptrend",
+        "setup_scores": {"pullback_uptrend": 60, "base_breakout": 30, "oversold_bounce": 0, "range_support": 0},
         "volume_ratio": 1.5,
-        "data_quality": "partial",   # 0 options pts
-        "atm_oi": 600,
-        "atm_bid": 0.60,
+        "vol_52w_pct_rank": 96.0,
+        "rs_20d": 8.0,
+        "data_quality": "complete", "atm_oi": 600, "atm_bid": 0.60,
     }
     macro = {"spy": {"regime": "bullish"}, "qqq": {"regime": "bullish"}}
     score = deterministic_score(candidate, macro)
-    assert score["total"] == 80   # 25 + 20 + 15 + 20 + 0
+    # 60 setup + 10 macro + 10 vol + 5 vol_rank + 5 rs + 10 options = 100
+    assert score["total"] == 100
+    assert score["setup_type"] == "pullback_uptrend"
+    assert score["setup_score"] == 60
 
 
-def test_deterministic_score_one_bullish_gives_10_macro_pts():
+def test_deterministic_score_no_options_data_still_scores():
     from backend.services.bull import deterministic_score
     candidate = {
-        "channel_proximity_pct": 0.0,
-        "rsi_slope": 0.0,
-        "volume_ratio": 0.5,
+        "setup_score": 40, "setup_type": "base_breakout",
+        "volume_ratio": 1.0,
+        "rs_20d": 6.0,
         "data_quality": "price_only",
     }
     macro = {"spy": {"regime": "bullish"}, "qqq": {"regime": "neutral"}}
+    # 40 setup + 5 macro + 7 vol + 0 vol_rank + 5 rs + 0 options = 57
     score = deterministic_score(candidate, macro)
-    assert score["total"] == 35   # 25 + 0 + 0 + 10 + 0
+    assert score["total"] == 57
+    assert score["setup_type"] == "base_breakout"
 
 
-def test_stage1_filter_returns_candidates_sorted_by_proximity():
+def test_setup_detectors_score_zero_when_pattern_absent():
+    from backend.services.bull import (
+        detect_pullback_uptrend, detect_base_breakout,
+        detect_oversold_bounce, detect_range_support,
+    )
+    # Wildly volatile random-ish series: no clean pattern of any kind
+    closes = [100 + (i * 0.7 if i % 3 == 0 else -i * 0.4) for i in range(65)]
+    highs  = [c + 3 for c in closes]
+    lows   = [c - 3 for c in closes]
+    opens_ = [c - 0.5 for c in closes]
+    # None of the detectors should confidently fire on chaos
+    p = detect_pullback_uptrend(closes, highs, lows)
+    b = detect_base_breakout(closes, highs, lows)
+    o = detect_oversold_bounce(closes, opens_)
+    r = detect_range_support(closes, highs, lows)
+    # Assert they all stay low, not that they're exactly zero — one might catch
+    # something incidental. The important behavior: no setup dominates junk data.
+    assert max(p, b, o, r) < 40, f"expected all setups < 40 on chaos data, got {(p, b, o, r)}"
+
+
+def test_stage1_filter_rejects_below_hard_gates():
     from backend.services import bull as bull_svc
-
-    def _snap(sym, slope, prox_pct, rsi_direction="rising"):
-        closes = [100 + i * (0.5 if slope > 0 else -0.5) for i in range(25)]
-        lows   = [c - 5 for c in closes[-20:]]
-        highs  = [c + 5 for c in closes[-20:]]
-        if prox_pct > 0.25:
-            closes[-1] = lows[-1] + (highs[-1] - lows[-1]) * prox_pct
-        return {
-            "symbol": sym,
-            "close": closes[-1],
-            "sma50": closes[-1] * 0.95,
-            "rsi14": 52.0,
-            "volume": 2_000_000.0,
-            "avg_volume_20d": 1_500_000,
-            "closes": closes,
-            "highs": highs,
-            "lows": lows,
-        }
-
-    snapshots = {
-        "LOW_PROX": _snap("LOW_PROX", slope=0.5, prox_pct=0.05),
-        "MID_PROX": _snap("MID_PROX", slope=0.5, prox_pct=0.20),
-        "CHEAP": {
-            "symbol": "CHEAP", "close": 8.0, "avg_volume_20d": 2_000_000,
-            "closes": [8.0] * 25, "highs": [9.0] * 20, "lows": [7.0] * 20,
-        },
-    }
-    original_cp = bull_svc._channel_proximity
-    def mock_cp(closes, highs, lows):
-        c = closes[-1]
-        if c > 100:
-            prox = 0.05 if c > 112 else 0.20
-            return {"slope": 0.5, "proximity_pct": prox, "passes": True}
-        return {"slope": 0.5, "proximity_pct": 0.5, "passes": False}
-    bull_svc._channel_proximity = mock_cp
-
-    original_rs = bull_svc._rsi_slope
-    bull_svc._rsi_slope = lambda c: 1.0
-
-    try:
-        result = bull_svc.stage1_filter(snapshots)
-    finally:
-        bull_svc._channel_proximity = original_cp
-        bull_svc._rsi_slope = original_rs
-
-    symbols = [r["symbol"] for r in result]
-    assert "CHEAP" not in symbols          # price < 15 floor
-    assert "channel_proximity_pct" in result[0]
+    # CHEAP → price < 15 fails price gate
+    cheap = _fake_snap(sym="CHEAP", closes=[8.0] * 65)
+    cheap["close"] = 8.0
+    # LOWVOL → avg_vol < 500k fails volume gate
+    lowvol = _fake_snap(sym="LOWVOL")
+    lowvol["avg_volume_20d"] = 100_000
+    # BELOW_MA → close below sma50 * 0.98 fails trend gate
+    below_ma = _fake_snap(sym="BELOW_MA", close=100.0, sma50=110.0)
+    below_ma["close"] = 100.0
+    result = bull_svc.stage1_filter({"CHEAP": cheap, "LOWVOL": lowvol, "BELOW_MA": below_ma})
+    assert [c["symbol"] for c in result] == []
 
 
-def test_stage1_filter_excludes_failed_channel():
+def test_stage1_filter_tags_setup_type_when_pattern_fires():
     from backend.services import bull as bull_svc
-
-    snap = {
-        "symbol": "FLAT", "close": 100.0, "avg_volume_20d": 1_500_000,
-        "volume": 1_500_000,
-        "closes": [100.0] * 25,
-        "highs": [105.0] * 20,
-        "lows": [95.0] * 20,
-    }
-    original_cp = bull_svc._channel_proximity
-    bull_svc._channel_proximity = lambda c, h, l: {"slope": -0.1, "proximity_pct": 0.1, "passes": False}
-    original_rs = bull_svc._rsi_slope
-    bull_svc._rsi_slope = lambda c: 1.0
-    try:
-        result = bull_svc.stage1_filter({"FLAT": snap})
-    finally:
-        bull_svc._channel_proximity = original_cp
-        bull_svc._rsi_slope = original_rs
-    assert result == []
+    # Construct a clean tight base with close near top → base_breakout should fire strongly
+    base_closes = [100 + (0.3 if i % 2 == 0 else -0.3) for i in range(45)]
+    # Ramp higher for the last 20 bars to put us at top of range (breakout imminent)
+    base_closes += [103 + (i * 0.15) for i in range(20)]
+    highs = [c + 1 for c in base_closes]
+    lows  = [c - 1 for c in base_closes]
+    opens_ = [c - 0.1 for c in base_closes]
+    snap = _fake_snap(sym="BASE", close=base_closes[-1], sma50=100.0,
+                      closes=base_closes, highs=highs, lows=lows, opens_=opens_)
+    result = bull_svc.stage1_filter({"BASE": snap})
+    assert len(result) == 1
+    assert result[0]["setup_type"] in ("base_breakout", "pullback_uptrend")
+    assert result[0]["setup_score"] > 0
+    assert "setup_scores" in result[0]
 
 
 # ── Task 6: stage2_options_check + run_pipeline ────────────────────────────────
@@ -362,12 +345,15 @@ def test_run_pipeline_returns_expected_shape(monkeypatch):
     import backend.services.bull as bull_svc
     import backend.services.market as mkt
 
+    n = 65
+    closes = [178.0 + i * 0.15 for i in range(n)]
     fake_snap = {
-        "symbol": "AAPL", "close": 185.0, "sma50": 175.0, "rsi14": 52.0,
+        "symbol": "AAPL", "close": closes[-1], "sma50": 175.0, "rsi14": 52.0,
         "volume": 2_000_000.0, "avg_volume_20d": 1_500_000,
-        "closes": [180.0 + i * 0.3 for i in range(25)],
-        "highs": [183.0 + i * 0.3 for i in range(20)],
-        "lows": [177.0 + i * 0.3 for i in range(20)],
+        "opens":  [c - 0.2 for c in closes],
+        "closes": closes,
+        "highs":  [c + 1.5 for c in closes],
+        "lows":   [c - 1.5 for c in closes],
     }
     monkeypatch.setattr(bull_svc, "_batch_eod_snapshots", lambda syms: {"AAPL": fake_snap} if "AAPL" in syms or syms == ["SPY", "QQQ"] else {"SPY": {**fake_snap, "symbol": "SPY"}, "QQQ": {**fake_snap, "symbol": "QQQ"}})
     monkeypatch.setattr(mkt, "get_sector_etfs", lambda: [{"symbol": "XLK", "label": "strong", "pct_vs_20d": 1.2}])
