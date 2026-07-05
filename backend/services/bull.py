@@ -236,13 +236,22 @@ def _rsi_slope(closes: list) -> float:
 
 def deterministic_score(candidate: dict, macro: dict) -> dict:
     """
-    Returns {total, channel_pts, rsi_pts, volume_pts, vol_rank_pts, macro_pts, options_pts, *_why}.
-    Each component is capped at its individual max so no single dimension can
-    inflate the total beyond its allocation.
-    Channel proximity (25), RSI slope (20), Volume ratio (15),
-    Macro alignment (20), Options quality (20), 52w volume rank bonus (10).
-    Total is clamped at 100, so the 10-pt vol_rank bonus rewards genuinely
-    exceptional volume days without inflating already-strong setups.
+    Multi-signal score for a bull put pullback setup.
+
+    Components (each capped individually so no single dimension can inflate):
+      Channel proximity ......... 25
+      RSI slope ................. 20   (used to be a hard filter; now score-only)
+      Volume ratio .............. 15
+      Macro alignment ........... 20
+      Options quality ........... 20
+      52w volume rank bonus ..... 10
+      Pullback freshness ........ 10   (fresh 20d high → real pullback)
+      Relative strength bonus ... 5    (vs SPY over 20d)
+      Bullish reversal pattern .. 5    (hammer / engulfing / piercing at the low)
+
+    Sum can theoretically reach 130 pre-clamp; total is clamped at 100. This
+    means genuinely exceptional setups (all bonuses lit) still stop at 100
+    without inflating mid-strength ones.
     """
     # Channel proximity: capped at 25. Negative proximity (below channel) = 0.
     prox = candidate.get("channel_proximity_pct")
@@ -285,6 +294,25 @@ def deterministic_score(candidate: dict, macro: dict) -> dict:
     else:
         vol_rank_pts = 0
 
+    # Pullback freshness: 10 pts if the 20d high printed within the last 3 bars, 5 if last 7.
+    # A stock at the 20d low because it just retraced from a fresh push is a real pullback;
+    # one that hit the 20d low after 15 bars of decline is a downtrend, not a pullback.
+    pullback_bars = int(candidate.get("pullback_bars") if candidate.get("pullback_bars") is not None else 19)
+    if pullback_bars <= 3:
+        pullback_pts = 10
+    elif pullback_bars <= 7:
+        pullback_pts = 5
+    else:
+        pullback_pts = 0
+
+    # Relative strength bonus: 20d return vs SPY. +5 if outperforming by >= 5 pts.
+    rs_20d = float(candidate.get("rs_20d") or 0.0)
+    rs_pts = 5 if rs_20d >= 5.0 else 0
+
+    # Candle pattern bonus: bullish reversal at the low earns confirmation credit.
+    bull_pattern = candidate.get("bull_pattern")
+    pattern_pts = 5 if bull_pattern else 0
+
     # Build justification strings
     if prox is None:
         channel_why = "No channel data"
@@ -326,13 +354,40 @@ def deterministic_score(candidate: dict, macro: dict) -> dict:
     else:
         vol_rank_why = f"52-week volume rank {vol_pct_rank:.0f}th pct — unremarkable"
 
-    total = min(100, channel_pts + rsi_pts + volume_pts + macro_pts + options_pts + vol_rank_pts)
+    if pullback_pts >= 10:
+        pullback_why = f"Fresh pullback: 20d high just {pullback_bars} bar(s) ago"
+    elif pullback_pts >= 5:
+        pullback_why = f"Recent pullback: 20d high {pullback_bars} bars ago"
+    else:
+        pullback_why = f"Stale — 20d high was {pullback_bars} bars ago; may be a downtrend, not a pullback"
+
+    if rs_pts >= 5:
+        rs_why = f"Outperforming SPY by {rs_20d:+.1f} pts over last 20d"
+    elif rs_20d >= 0:
+        rs_why = f"In line with SPY ({rs_20d:+.1f} pts over last 20d)"
+    else:
+        rs_why = f"Trailing SPY by {rs_20d:+.1f} pts over last 20d"
+
+    _PATTERN_LABEL = {"hammer": "Hammer", "bullish_engulfing": "Bullish engulfing", "piercing_line": "Piercing line"}
+    if bull_pattern:
+        pattern_why = f"{_PATTERN_LABEL.get(bull_pattern, bull_pattern)} at the low — reversal confirmation"
+    else:
+        pattern_why = "No bullish reversal pattern in the last 2 bars"
+
+    total = min(
+        100,
+        channel_pts + rsi_pts + volume_pts + macro_pts + options_pts
+        + vol_rank_pts + pullback_pts + rs_pts + pattern_pts
+    )
     return {
         "total": total,
         "channel_pts": channel_pts,   "channel_why":   channel_why,
         "rsi_pts": rsi_pts,           "rsi_why":       rsi_why,
         "volume_pts": volume_pts,     "volume_why":    volume_why,
         "vol_rank_pts": vol_rank_pts, "vol_rank_why":  vol_rank_why,
+        "pullback_pts": pullback_pts, "pullback_why":  pullback_why,
+        "rs_pts": rs_pts,             "rs_why":        rs_why,
+        "pattern_pts": pattern_pts,   "pattern_why":   pattern_why,
         "macro_pts": macro_pts,       "macro_why":     macro_why,
         "options_pts": options_pts,   "options_why":   options_why,
     }
@@ -413,6 +468,7 @@ def _batch_eod_snapshots(symbols: list) -> dict:
             rsi14 = 100.0 if avg_loss == 0 else round(100 - (100 / (1 + avg_gain / avg_loss)), 2)
             highs = df["High"].tolist()
             lows = df["Low"].tolist()
+            opens = df["Open"].tolist()
             vol_52w = _compute_volume_52w(volumes, dates)
             snapshots[sym] = {
                 "symbol": sym,
@@ -421,9 +477,10 @@ def _batch_eod_snapshots(symbols: list) -> dict:
                 "rsi14": rsi14,
                 "volume": float(volumes[-1]),
                 "avg_volume_20d": avg_vol_20d,
+                "opens":  [float(o) for o in opens[-65:]],
                 "closes": [float(c) for c in closes[-65:]],
-                "highs": [float(h) for h in highs[-65:]],
-                "lows": [float(l) for l in lows[-65:]],
+                "highs":  [float(h) for h in highs[-65:]],
+                "lows":   [float(l) for l in lows[-65:]],
                 **vol_52w,
             }
         except Exception:
@@ -433,25 +490,93 @@ def _batch_eod_snapshots(symbols: list) -> dict:
 
 # ── Stage 1 Screener ──────────────────────────────────────────────────────────
 
-def stage1_filter(snapshots: dict) -> list:
+def _bars_since_20d_high(highs: list) -> int:
+    """Bars ago the 20d high last printed (0 = today, up to 19). Fresh pullbacks score high."""
+    if len(highs) < 20:
+        return 20
+    window = highs[-20:]
+    max_val = max(window)
+    for i in range(len(window) - 1, -1, -1):
+        if window[i] == max_val:
+            return len(window) - 1 - i
+    return 20
+
+
+def _rs_20d(stock_closes: list, spy_closes: list) -> float:
+    """20-day relative strength: (stock 20d return) − (SPY 20d return), in percent."""
+    if len(stock_closes) < 21 or len(spy_closes) < 21:
+        return 0.0
+    if stock_closes[-21] <= 0 or spy_closes[-21] <= 0:
+        return 0.0
+    stock_ret = (stock_closes[-1] / stock_closes[-21] - 1) * 100
+    spy_ret   = (spy_closes[-1]   / spy_closes[-21]   - 1) * 100
+    return round(stock_ret - spy_ret, 2)
+
+
+def _detect_bullish_reversal_pattern(opens: list, closes: list, highs: list, lows: list) -> Optional[str]:
+    """Detect a bullish reversal pattern in the LAST 1-2 bars — the ones the trader would
+    see on the chart today. Returns the pattern name or None. Order: hammer > engulfing >
+    piercing_line (most specific first)."""
+    if len(closes) < 2 or len(opens) < 2 or len(highs) < 2 or len(lows) < 2:
+        return None
+    o1, c1, h1, l1 = opens[-1], closes[-1], highs[-1], lows[-1]
+    o0, c0        = opens[-2], closes[-2]
+    body1 = abs(c1 - o1)
+    range1 = h1 - l1
+    if range1 <= 0:
+        return None
+    # Hammer: small body at top, long lower wick (>= 2x body), close near high
+    lower_wick = min(o1, c1) - l1
+    upper_wick = h1 - max(o1, c1)
+    if body1 > 0 and lower_wick >= 2 * body1 and upper_wick <= body1 and c1 >= o1:
+        return "hammer"
+    # Bullish engulfing: prior red bar, today green bar body strictly engulfs prior body
+    if c0 < o0 and c1 > o1 and c1 >= o0 and o1 <= c0:
+        return "bullish_engulfing"
+    # Piercing line: prior red bar, today opens below prior low, closes above midpoint of prior body
+    prior_mid = (o0 + c0) / 2
+    if c0 < o0 and o1 < l1 * 1.001 and c1 > prior_mid and c1 < o0:
+        return "piercing_line"
+    return None
+
+
+def stage1_filter(snapshots: dict, macro_snaps: Optional[dict] = None) -> list:
     """
-    Stage 1: channel-proximity filter.
-    Passes: close > $15, avg_volume_20d > 500k, upward channel (slope > 0),
-    price in bottom 25% of channel (proximity_pct <= 0.25), RSI slope positive.
-    Returns top 20 sorted by channel proximity ascending (closest to support first).
+    Stage 1: trend + pullback quality filter.
+
+    Filters (all required):
+      - Close > $15 and avg_volume_20d > 500k (liquidity)
+      - Close >= SMA50 × 0.98 (trend intact — 2% buffer for pullbacks that briefly touched
+        the MA but held)
+      - 20d channel: rising slope AND close in bottom 25% (pullback to support)
+      - 60d channel gate: rising + bottom 50% (macro sanity)
+      - Relative strength vs SPY over last 20d must not be < −5% (avoid weak names)
+
+    Note: RSI slope > 0 is NO LONGER a hard gate — it went from filter to scoring signal.
+    This intentionally opens the funnel a bit while the score does the quality sorting.
+
+    Enriches candidates with pullback_bars, rs_20d, and bull_pattern for scoring.
+    Returns top 20 sorted by channel proximity ascending.
     """
+    spy_closes = ((macro_snaps or {}).get("SPY", {}) or {}).get("closes", []) or []
     passed = []
     for sym, snap in snapshots.items():
         if snap is None:
             continue
-        if snap.get("close", 0) <= 15:
+        close_px = snap.get("close", 0)
+        if close_px <= 15:
             continue
         if (snap.get("avg_volume_20d") or 0) < 500_000:
             continue
         closes = snap.get("closes", [])
-        highs = snap.get("highs", [])
-        lows = snap.get("lows", [])
+        highs  = snap.get("highs", [])
+        lows   = snap.get("lows", [])
+        opens_ = snap.get("opens", [])
         if len(closes) < 22 or len(highs) < 20 or len(lows) < 20:
+            continue
+        # Trend intact: close within 2% of SMA50 or above
+        sma50 = snap.get("sma50") or 0.0
+        if sma50 > 0 and close_px < sma50 * 0.98:
             continue
         channel = _channel_proximity(closes, highs, lows)
         if not channel["passes"]:
@@ -459,16 +584,23 @@ def stage1_filter(snapshots: dict) -> list:
         ctx60 = _channel_context_60d(closes, highs, lows)
         if not ctx60["passes_gate"]:
             continue
-        rsi_slope_val = _rsi_slope(closes)
-        if rsi_slope_val <= 0:
+        # Relative strength — reject weakness even in a passing chart
+        rs_20d = _rs_20d(closes, spy_closes) if spy_closes else 0.0
+        if rs_20d < -5.0:
             continue
+        rsi_slope_val = _rsi_slope(closes)  # no longer gates — feeds the score
         volume_ratio = (snap.get("volume") or 0) / max(snap.get("avg_volume_20d") or 1, 1)
+        pullback_bars = _bars_since_20d_high(highs)
+        bull_pattern = _detect_bullish_reversal_pattern(opens_, closes, highs, lows)
         passed.append({
             **snap,
-            "channel_slope": channel["slope"],
+            "channel_slope":         channel["slope"],
             "channel_proximity_pct": channel["proximity_pct"],
-            "rsi_slope": rsi_slope_val,
-            "volume_ratio": volume_ratio,
+            "rsi_slope":             rsi_slope_val,
+            "volume_ratio":          volume_ratio,
+            "rs_20d":                rs_20d,
+            "pullback_bars":         pullback_bars,
+            "bull_pattern":          bull_pattern,
         })
     passed.sort(key=lambda x: x.get("channel_proximity_pct", 1.0))
     return passed[:20]
@@ -663,9 +795,9 @@ def run_pipeline(options_provider, playbook_rules: list, bull_profile: dict) -> 
     sectors = get_sector_etfs()
     sector_label_map = {s["symbol"]: s["label"] for s in sectors}
 
-    # 3. Stage 1: batch snapshot + channel filter → top 20
+    # 3. Stage 1: batch snapshot + trend+pullback filter → top 20
     raw_snapshots = _batch_eod_snapshots(SP500_UNIVERSE)
-    stage1 = stage1_filter(raw_snapshots)
+    stage1 = stage1_filter(raw_snapshots, macro_snaps=macro_snaps)
 
     # 4. Enrich with sector info
     for c in stage1:
@@ -685,6 +817,9 @@ def run_pipeline(options_provider, playbook_rules: list, bull_profile: dict) -> 
             "rsi":      breakdown["rsi_pts"],      "rsi_why":      breakdown["rsi_why"],
             "volume":   breakdown["volume_pts"],   "volume_why":   breakdown["volume_why"],
             "vol_rank": breakdown["vol_rank_pts"], "vol_rank_why": breakdown["vol_rank_why"],
+            "pullback": breakdown["pullback_pts"], "pullback_why": breakdown["pullback_why"],
+            "rs":       breakdown["rs_pts"],       "rs_why":       breakdown["rs_why"],
+            "pattern":  breakdown["pattern_pts"],  "pattern_why":  breakdown["pattern_why"],
             "macro":    breakdown["macro_pts"],    "macro_why":    breakdown["macro_why"],
             "options":  breakdown["options_pts"],  "options_why":  breakdown["options_why"],
         }

@@ -4,12 +4,15 @@ import { api } from '../api'
 function ScoreTooltip({ breakdown }) {
   if (!breakdown) return null
   const rows = [
-    ['Channel',   breakdown.channel,  25, breakdown.channel_why],
-    ['RSI Slope', breakdown.rsi,      20, breakdown.rsi_why],
-    ['Volume',    breakdown.volume,   15, breakdown.volume_why],
-    ['52w Vol',   breakdown.vol_rank, 10, breakdown.vol_rank_why],
-    ['Macro',     breakdown.macro,    20, breakdown.macro_why],
-    ['Options',   breakdown.options,  20, breakdown.options_why],
+    ['Channel',    breakdown.channel,  25, breakdown.channel_why],
+    ['RSI Slope',  breakdown.rsi,      20, breakdown.rsi_why],
+    ['Pullback',   breakdown.pullback, 10, breakdown.pullback_why],
+    ['Rel Str',    breakdown.rs,        5, breakdown.rs_why],
+    ['Pattern',    breakdown.pattern,   5, breakdown.pattern_why],
+    ['Volume',     breakdown.volume,   15, breakdown.volume_why],
+    ['52w Vol',    breakdown.vol_rank, 10, breakdown.vol_rank_why],
+    ['Macro',      breakdown.macro,    20, breakdown.macro_why],
+    ['Options',    breakdown.options,  20, breakdown.options_why],
   ]
   return (
     <div style={{
@@ -384,12 +387,15 @@ function ExpandedRow({ c, logged, onLog, onDismiss }) {
         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 10 }}>
           SCORE BREAKDOWN — {c.score}/100
         </div>
-        <MiniBar label="Channel Proximity" pts={bd.channel ?? 0}  max={25} why={bd.channel_why} />
-        <MiniBar label="RSI Slope"         pts={bd.rsi ?? 0}      max={20} why={bd.rsi_why} />
-        <MiniBar label="Volume Ratio"      pts={bd.volume ?? 0}   max={15} why={bd.volume_why} />
-        <MiniBar label="52w Vol Rank"      pts={bd.vol_rank ?? 0} max={10} why={bd.vol_rank_why} />
-        <MiniBar label="Macro Alignment"   pts={bd.macro ?? 0}    max={20} why={bd.macro_why} />
-        <MiniBar label="Options Quality"   pts={bd.options ?? 0}  max={20} why={bd.options_why} />
+        <MiniBar label="Channel Proximity"  pts={bd.channel ?? 0}  max={25} why={bd.channel_why} />
+        <MiniBar label="RSI Slope"          pts={bd.rsi ?? 0}      max={20} why={bd.rsi_why} />
+        <MiniBar label="Pullback Freshness" pts={bd.pullback ?? 0} max={10} why={bd.pullback_why} />
+        <MiniBar label="Relative Strength"  pts={bd.rs ?? 0}       max={5}  why={bd.rs_why} />
+        <MiniBar label="Bullish Pattern"    pts={bd.pattern ?? 0}  max={5}  why={bd.pattern_why} />
+        <MiniBar label="Volume Ratio"       pts={bd.volume ?? 0}   max={15} why={bd.volume_why} />
+        <MiniBar label="52w Vol Rank"       pts={bd.vol_rank ?? 0} max={10} why={bd.vol_rank_why} />
+        <MiniBar label="Macro Alignment"    pts={bd.macro ?? 0}    max={20} why={bd.macro_why} />
+        <MiniBar label="Options Quality"    pts={bd.options ?? 0}  max={20} why={bd.options_why} />
       </div>
 
       {c.setup_brief && (
@@ -503,8 +509,25 @@ function CandidatesTable({ candidates }) {
                 alignItems: 'center', opacity: isGrayed ? 0.5 : 1,
               }}
             >
-              <span style={{ fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontWeight: 700, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 {c.symbol}
+                {c.bull_pattern && (
+                  <span
+                    title={`Bullish reversal pattern detected on the last 2 bars: ${c.bull_pattern.replace(/_/g, ' ')}`}
+                    style={{
+                      fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
+                      padding: '1px 5px', borderRadius: 3,
+                      background: 'rgba(63,185,80,0.18)',
+                      color: 'var(--green)',
+                      border: '1px solid rgba(63,185,80,0.4)',
+                    }}
+                  >
+                    {c.bull_pattern === 'hammer' ? '🔨 HAMMER'
+                      : c.bull_pattern === 'bullish_engulfing' ? '⬆ ENGULF'
+                      : c.bull_pattern === 'piercing_line' ? '⇑ PIERCE'
+                      : c.bull_pattern.toUpperCase()}
+                  </span>
+                )}
                 {c.vol_52w_pct_rank != null && c.vol_52w_pct_rank >= 80 && (
                   <span
                     title={`Today's volume is in the ${Math.round(c.vol_52w_pct_rank)}th percentile of the last 52 weeks. 52w peak: ${c.vol_52w_max_date || '—'}`}
