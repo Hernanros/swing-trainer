@@ -643,14 +643,11 @@ def stage1_filter(snapshots: dict, macro_snaps: Optional[dict] = None) -> list:
         sma150 = snap.get("sma150")
         if sma50 > 0 and close_px < sma50 * 0.98:
             continue
-        # Extension gates: reject stocks trading way above their MAs. A bull put
-        # spread on a stock 30% above SMA150 has severe mean-reversion risk that
-        # the local setup detectors can't see (they only look at the last ~20 bars).
-        if sma20  > 0 and close_px / sma20  > 1.10:
-            continue
-        if sma50  > 0 and close_px / sma50  > 1.15:
-            continue
-        if sma150 and sma150 > 0 and close_px / sma150 > 1.25:
+        # MA-retest gate: at least one of SMA20/50/150 must be within 3% of close
+        # (in either direction). A stock floating above ALL three MAs has no nearby
+        # support — not a bull-put setup, no matter what the local detectors say.
+        mas = [m for m in (sma20, sma50, sma150) if m and m > 0]
+        if mas and not any(0.97 <= close_px / m <= 1.03 for m in mas):
             continue
         rs_20d = _rs_20d(closes, spy_closes) if spy_closes else 0.0
         if rs_20d < -5.0:
