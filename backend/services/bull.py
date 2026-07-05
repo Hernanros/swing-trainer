@@ -393,7 +393,9 @@ def _batch_eod_snapshots(symbols: list) -> dict:
             close = float(closes[-1])
             if math.isnan(close):
                 continue
-            sma50 = sum(closes[-50:]) / min(50, len(closes))
+            sma20  = sum(closes[-20:]) / min(20, len(closes))
+            sma50  = sum(closes[-50:]) / min(50, len(closes))
+            sma150 = sum(closes[-150:]) / min(150, len(closes)) if len(closes) >= 150 else None
             avg_vol_20d = int(sum(volumes[-20:]) / 20)
             diffs = [closes[i] - closes[i - 1] for i in range(1, len(closes))]
             gains = [max(d, 0) for d in diffs]
@@ -408,7 +410,9 @@ def _batch_eod_snapshots(symbols: list) -> dict:
             snapshots[sym] = {
                 "symbol": sym,
                 "close": close,
-                "sma50": round(float(sma50), 4),
+                "sma20":  round(float(sma20), 4),
+                "sma50":  round(float(sma50), 4),
+                "sma150": round(float(sma150), 4) if sma150 is not None else None,
                 "rsi14": rsi14,
                 "volume": float(volumes[-1]),
                 "avg_volume_20d": avg_vol_20d,
@@ -634,8 +638,19 @@ def stage1_filter(snapshots: dict, macro_snaps: Optional[dict] = None) -> list:
         opens_ = snap.get("opens", [])
         if len(closes) < 60 or len(highs) < 60 or len(lows) < 60:
             continue
-        sma50 = snap.get("sma50") or 0.0
+        sma20  = snap.get("sma20")  or 0.0
+        sma50  = snap.get("sma50")  or 0.0
+        sma150 = snap.get("sma150")
         if sma50 > 0 and close_px < sma50 * 0.98:
+            continue
+        # Extension gates: reject stocks trading way above their MAs. A bull put
+        # spread on a stock 30% above SMA150 has severe mean-reversion risk that
+        # the local setup detectors can't see (they only look at the last ~20 bars).
+        if sma20  > 0 and close_px / sma20  > 1.10:
+            continue
+        if sma50  > 0 and close_px / sma50  > 1.15:
+            continue
+        if sma150 and sma150 > 0 and close_px / sma150 > 1.25:
             continue
         rs_20d = _rs_20d(closes, spy_closes) if spy_closes else 0.0
         if rs_20d < -5.0:
