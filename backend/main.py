@@ -34,6 +34,40 @@ SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-secret-change-in-production")
 _DEV_MODE = os.getenv("DEV_BYPASS_AUTH", "false").lower() == "true"
 
 
+# ── Bull paper-trade exit thresholds ────────────────────────────────────────
+# Match the trader's live discipline (~/Documents/trading-journal/lessons.md L007):
+# profit-take at 60% of max credit, hard stop at 50% of max loss.
+PAPER_PROFIT_TARGET_PCT = 0.60
+PAPER_STOP_LOSS_PCT     = 0.50
+
+
+def decide_paper_exit(spread_mid: float, credit: float, width: float):
+    """Pure decision function — returns (outcome, pnl_per_contract) or None to hold.
+
+    Args:
+      credit:     premium received when the spread was sold, per share.
+      width:      short_strike - long_strike, per share.
+      spread_mid: current debit to close, per share (from the option chain).
+
+    Returns:
+      ("early_win", pnl)  — 60% profit target hit
+      ("stop_loss", pnl)  — 50% max-loss stop hit
+      None                — hold
+    """
+    if spread_mid is None or spread_mid < 0 or credit <= 0 or width <= 0:
+        return None
+    max_loss = width - credit
+    if max_loss <= 0:
+        return None
+    # 60% max profit: current debit is 40% of credit or less
+    if spread_mid <= credit * (1 - PAPER_PROFIT_TARGET_PCT):
+        return ("early_win", round((credit - spread_mid) * 100, 2))
+    # 50% max loss stop: current debit reaches credit + 50% of max_loss
+    if spread_mid >= credit + max_loss * PAPER_STOP_LOSS_PCT:
+        return ("stop_loss", round((credit - spread_mid) * 100, 2))
+    return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     models.Base.metadata.create_all(bind=engine)
@@ -182,7 +216,7 @@ async def lifespan(app: FastAPI):
     async def _run_scheduled_bull_scan():
         from datetime import date as _date, datetime as _datetime, timezone as _tz
         from backend.database import SessionLocal
-        from backend.models import BullProfile, BullScan, PlaybookRule
+        from backend.models import BullProfile, BullScan, PaperBullTrade, PlaybookRule
         from backend.services.bull import run_pipeline
         from backend.services.options import get_options_provider
         import json as _json
@@ -205,26 +239,121 @@ async def lifespan(app: FastAPI):
                         playbook_rules=rules,
                         bull_profile=profile_dict,
                     )
-                    now = _datetime.now(_tz.utc).isoformat()
+                    now_dt = _datetime.now(_tz.utc)
+                    now = now_dt.isoformat()
                     existing = db.query(BullScan).filter_by(user_id=profile_row.user_id, scan_date=today).first()
                     if existing:
                         existing.macro_json = _json.dumps(result["macro"])
                         existing.sectors_json = _json.dumps(result["sectors"])
                         existing.results_json = _json.dumps(result["candidates"])
                         existing.created_at = now
+                        scan_obj = existing
                     else:
-                        db.add(BullScan(
+                        scan_obj = BullScan(
                             user_id=profile_row.user_id,
                             scan_date=today,
                             macro_json=_json.dumps(result["macro"]),
                             sectors_json=_json.dumps(result["sectors"]),
                             results_json=_json.dumps(result["candidates"]),
                             created_at=now,
-                        ))
+                        )
+                        db.add(scan_obj)
+                        db.flush()
+                    # Auto-log paper trades — mirrors routers/bull.py run_scan endpoint
+                    macro = result.get("macro", {})
+                    spy_r = (macro.get("spy") or {}).get("regime", "neutral")
+                    qqq_r = (macro.get("qqq") or {}).get("regime", "neutral")
+                    macro_regime = "bullish" if spy_r == "bullish" and qqq_r == "bullish" else "neutral"
+                    logged = 0
+                    for c in result["candidates"]:
+                        if c.get("data_quality") == "complete" and (c.get("score") or 0) >= 60:
+                            db.add(PaperBullTrade(
+                                user_id=profile_row.user_id,
+                                scan_id=scan_obj.id,
+                                symbol=c["symbol"],
+                                logged_at=now_dt,
+                                expiry=c.get("expiry", ""),
+                                short_strike=float(c.get("short_strike") or 0),
+                                long_strike=float(c.get("long_strike") or 0),
+                                premium_credit=float(c.get("estimated_credit") or 0),
+                                score=int(c.get("score") or 0),
+                                data_quality=c.get("data_quality", "complete"),
+                                channel_proximity=c.get("channel_proximity_pct"),
+                                rsi_slope=c.get("rsi_slope"),
+                                macro_regime=macro_regime,
+                                auto_logged=True,
+                            ))
+                            logged += 1
                     db.commit()
-                    _log.info("Bull scan completed for user_id=%s — %d candidates", profile_row.user_id, len(result["candidates"]))
+                    _log.info(
+                        "Bull scan completed for user_id=%s — %d candidates, %d paper trades auto-logged",
+                        profile_row.user_id, len(result["candidates"]), logged,
+                    )
                 except Exception as e:
                     _log.error("Bull scan failed for user_id=%s: %s", profile_row.user_id, e)
+        finally:
+            db.close()
+
+    def _fetch_spread_mid(symbol: str, expiry: str, short_strike: float, long_strike: float):
+        """Return spread mid (debit to close) using yfinance option chain, or None."""
+        try:
+            import yfinance as yf
+            ticker = yf.Ticker(symbol)
+            if expiry not in ticker.options:
+                return None
+            chain = ticker.option_chain(expiry)
+            puts = chain.puts
+            if puts.empty:
+                return None
+            short_rows = puts[puts["strike"] == short_strike]
+            long_rows  = puts[puts["strike"] == long_strike]
+            if short_rows.empty or long_rows.empty:
+                return None
+            short_bid = float(short_rows["bid"].iloc[0] or 0)
+            short_ask = float(short_rows["ask"].iloc[0] or 0)
+            long_bid  = float(long_rows["bid"].iloc[0] or 0)
+            long_ask  = float(long_rows["ask"].iloc[0] or 0)
+            if short_bid == 0 or short_ask == 0:
+                return None  # stale quote — don't act
+            short_mid = (short_bid + short_ask) / 2
+            long_mid  = (long_bid + long_ask) / 2
+            return round(short_mid - long_mid, 4)
+        except Exception:
+            return None
+
+    async def _apply_exit_rules_to_open_paper_trades():
+        """Check open paper trades and close them if profit target or stop-loss hit."""
+        from datetime import date as _date, datetime as _datetime, timezone as _tz
+        from backend.database import SessionLocal
+        from backend.models import PaperBullTrade
+
+        today_str = _date.today().isoformat()
+        if today_str in US_MARKET_HOLIDAYS_2026:
+            return
+        db = SessionLocal()
+        try:
+            open_trades = db.query(PaperBullTrade).filter(PaperBullTrade.outcome.is_(None)).all()
+            if not open_trades:
+                return
+            now = _datetime.now(_tz.utc)
+            closed = 0
+            for t in open_trades:
+                width = t.short_strike - t.long_strike
+                spread_mid = _fetch_spread_mid(t.symbol, t.expiry, t.short_strike, t.long_strike)
+                if spread_mid is None:
+                    continue
+                decision = decide_paper_exit(spread_mid, t.premium_credit, width)
+                if decision is None:
+                    continue
+                outcome, pnl = decision
+                t.outcome = outcome
+                t.pnl = pnl
+                t.resolved_at = now
+                closed += 1
+            db.commit()
+            _log.info("Exit-rules pass — closed %d open paper trades", closed)
+        except Exception as e:
+            _log.error("Exit-rules job failed: %s", e)
         finally:
             db.close()
 
@@ -276,10 +405,11 @@ async def lifespan(app: FastAPI):
             db.close()
 
     scheduler = AsyncIOScheduler(timezone=pytz.timezone("America/New_York"))
-    scheduler.add_job(_run_scheduled_bull_scan, "cron", day_of_week="mon-fri", hour=17, minute=0)
-    scheduler.add_job(_resolve_expiring_paper_trades, "cron", day_of_week="mon-fri", hour=16, minute=30)
+    scheduler.add_job(_apply_exit_rules_to_open_paper_trades, "cron", day_of_week="mon-fri", hour=15, minute=30)
+    scheduler.add_job(_resolve_expiring_paper_trades,          "cron", day_of_week="mon-fri", hour=16, minute=30)
+    scheduler.add_job(_run_scheduled_bull_scan,                "cron", day_of_week="mon-fri", hour=17, minute=0)
     scheduler.start()
-    _log.info("Bull scan scheduler started — runs weekdays at 5 PM ET")
+    _log.info("Bull scheduler started — exit rules 3:30 PM ET, expiry resolve 4:30 PM ET, new scan 5:00 PM ET")
 
     yield
 
